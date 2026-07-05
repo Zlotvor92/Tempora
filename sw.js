@@ -1,6 +1,6 @@
 /* v3 service worker — offline keširanje. Podigni broj verzije pri svakoj izmeni;
    stari keš se briše, PODACI u localStorage ostaju netaknuti. */
-const CACHE = 'sub19v3-cache-v1';
+const CACHE = 'sub19v3-cache-v2';
 const ASSETS = ['./', './index.html', './engine.js', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

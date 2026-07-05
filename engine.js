@@ -363,9 +363,14 @@ function mergeOverrides(freshWeeks, oldWeeks){
 }
 
 function nextMonday(ds){
-  const d=new Date(ds+'T00:00:00');
-  const wd=(d.getDay()+6)%7;            /* 0=Pon */
-  if(wd!==0)d.setDate(d.getDate()+(7-wd));
+  /* KRITIČNO: mora biti dosledno UTC. new Date(ds+'T00:00:00') tumači se kao
+     LOKALNO vreme, a new Date(ds) (bez vremena) kao UTC po ES spec-u — mešanje
+     te dve konvencije je ranije davalo pogrešan datum (unazad 1 dan) u SVAKOJ
+     vremenskoj zoni ispred UTC (Beograd, ceo istočni deo sveta), pošto browser
+     radi u korisnikovoj lokalnoj zoni, ne u serverskom/test okruženju. */
+  const d=new Date(ds);
+  const wd=(d.getUTCDay()+6)%7;            /* 0=Pon */
+  if(wd!==0)d.setUTCDate(d.getUTCDate()+(7-wd));
   return d.toISOString().slice(0,10);
 }
 function generatePlan(inp){

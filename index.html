@@ -731,6 +731,7 @@ function finishOnboarding(){
   };
   const plan=generatePlan(meta);
   if(plan.error){ $('#ob-err-1').textContent=plan.error; goObStep(1); return; }
+  meta.startDate = plan.meta.start; /* KRITIČNO: poravnaj na isti ponedeljak koji je generatePlan interno koristio — inače se dow-oznake (Pon/Sre/Pet) ne poklapaju sa stvarnim kalendarskim danima */
   S.meta=meta; S.meta._vdotAtGen=plan.meta.vdot0;
   S.plan=plan; S.vdotSmoothed=plan.meta.vdot0;
   save(); indexPlan();
@@ -1304,6 +1305,9 @@ function openSettings(){
     <input type="file" id="s-file" accept=".json,application/json" style="display:none">
     <hr class="sep">
     <div class="note-src">Poslednji backup: ${S.ui.lastBackup?fmtDY(S.ui.lastBackup):'nikad'} · Šema: v${S.v} · Plan: ${TOTAL_TR} treninga / ${fmtKm(totalPlanKm())} km · Trka: ${fmtDY(S.meta.raceDate)}</div>
+    <hr class="sep">
+    <div class="btnrow"><button class="btn danger" id="s-restart">Novi plan (ponovo pokreni wizard)</button></div>
+    <div class="note-src">Briše TEKUĆI plan, unose treninga i predikcije. Istorija kolena, težine i cilj mase OSTAJU.</div>
   `);
   $('#wt-start').addEventListener('change',e=>{
     const n=parseFloat(e.target.value.replace(',','.'));
@@ -1322,6 +1326,17 @@ function openSettings(){
   $('#s-exp').onclick=exportBackup;
   $('#s-imp').onclick=()=>$('#s-file').click();
   $('#s-file').onchange=e=>importBackup(e.target.files[0]);
+  $('#s-restart').onclick=restartWizard;
+}
+function restartWizard(){
+  if(!confirm('Napraviti nov plan?\n\nBriše se: tekući plan, unosi treninga, predikcije.\nOstaje: istorija kolena, težine, cilj mase.\n\nOvo je nepovratno bez backupa.'))return;
+  S.plan=null; S.meta=null; S.log={}; S.pred={}; S.vdotSmoothed=null;
+  save();
+  closeSheet();
+  $('#appHeader').style.display='none';$('#appMain').style.display='none';$('#tabbar').style.display='none';
+  wiz={ raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
+  renderOnboard();
+  $('#onboard').style.display='';
 }
 function exportBackup(){
   const data={app:'sub19v3',exportedAt:new Date().toISOString(),state:S};
