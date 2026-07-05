@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>TempoRA</title>
+<meta name="theme-color" content="#0A0A0F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TempoRA">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<style>
+:root{
+  --bg:#0A0A0F; --card:#16161D; --card2:#1D1D26; --line:rgba(255,255,255,.08);
+  --txt:#F5F5F7; --txt2:#9C9CA8; --txt3:#63636E;
+  --pink:#FA2E55; --green:#9BE821; --cyan:#00D5FA; --amber:#FFB020; --red:#FF453A;
+  --r:18px; --tab-h:58px;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{font-size:16px}
+body{
+  background:var(--bg); color:var(--txt); min-height:100dvh;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased; touch-action:manipulation; overscroll-behavior-y:none;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;touch-action:manipulation}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+header{
+  position:sticky;top:0;z-index:30;
+  padding:calc(var(--sat) + 10px) 18px 10px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(10,10,15,.78);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
+  border-bottom:1px solid var(--line);
+}
+.h-title{font-weight:800;font-size:1.05rem;letter-spacing:.02em}
+.h-sub{font-size:.72rem;color:var(--txt2);margin-top:2px;font-weight:600;letter-spacing:.02em}
+.h-gear{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;color:var(--txt2)}
+.h-gear:active{transform:scale(.9);color:var(--txt)}
+
+main{padding:14px 16px calc(var(--tab-h) + var(--sab) + 26px)}
+.page{display:none;animation:fadein .22s ease}
+.page.active{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.card-t{font-size:.72rem;font-weight:700;color:var(--txt2);letter-spacing:.09em;text-transform:uppercase;margin-bottom:12px}
+.big{font-size:3.4rem;font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.big-sub{font-size:.8rem;color:var(--txt2);font-weight:600;margin-top:6px}
+
+.hero{display:flex;gap:12px;margin-bottom:14px}
+.hero .card{flex:1;margin:0;text-align:center;padding:18px 10px}
+.hero .big{font-size:2.9rem}
+
+.tag{display:inline-block;font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:999px;margin-bottom:10px}
+.tag.lako{background:rgba(0,213,250,.14);color:var(--cyan)}
+.tag.tempo{background:rgba(250,46,85,.14);color:var(--pink)}
+.tag.int{background:rgba(250,46,85,.18);color:var(--pink)}
+.tag.lr{background:rgba(155,232,33,.14);color:var(--green)}
+.tag.snaga{background:rgba(255,176,32,.14);color:var(--amber)}
+.tag.odmor{background:rgba(255,255,255,.08);color:var(--txt2)}
+.tag.trka{background:var(--pink);color:#fff}
+.desc{white-space:pre-line;font-size:.92rem;line-height:1.5;color:var(--txt)}
+.meta{display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.meta div{font-size:.75rem;color:var(--txt2)}
+.meta b{display:block;font-size:1.15rem;color:var(--txt);font-variant-numeric:tabular-nums;margin-bottom:2px}
+
+.btnrow{display:flex;gap:10px;margin-top:14px}
+.btn{flex:1;min-height:50px;border-radius:14px;font-weight:800;font-size:.95rem;background:var(--pink);color:#fff;transition:transform .12s ease;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn:active{transform:scale(.96)}
+.btn.ghost{background:var(--card2);color:var(--txt);border:1px solid var(--line)}
+.btn.green{background:var(--green);color:#0A0A0F}
+.btn.danger{background:rgba(255,69,58,.14);color:var(--red)}
+.btn.sm{min-height:44px;font-size:.85rem;flex:none;padding:0 18px}
+.btn[disabled]{opacity:.4;pointer-events:none}
+
+.st{font-size:.68rem;font-weight:800;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.st.done{background:rgba(155,232,33,.16);color:var(--green)}
+.st.skip{background:rgba(255,176,32,.14);color:var(--amber)}
+.st.pending{background:rgba(255,255,255,.07);color:var(--txt3)}
+.st.rest{color:var(--txt3)}
+
+.wk{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:12px;overflow:hidden}
+.wk-h{width:100%;display:flex;align-items:center;gap:12px;padding:14px 16px;text-align:left}
+.wk-h:active{background:var(--card2)}
+.wk-n{font-size:1.25rem;font-weight:800;font-variant-numeric:tabular-nums;min-width:44px}
+.wk-i{flex:1;min-width:0}
+.wk-d{font-size:.72rem;color:var(--txt2);font-weight:600}
+.wk-f{font-size:.78rem;font-weight:700;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wk-km{text-align:right;font-size:.72rem;color:var(--txt2);font-weight:600}
+.wk-km b{display:block;font-size:.95rem;color:var(--txt);font-variant-numeric:tabular-nums}
+.wk-tag{font-size:.6rem;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(255,176,32,.15);color:var(--amber);margin-left:6px}
+.wk-bar{height:3px;background:var(--card2)}
+.wk-bar i{display:block;height:100%;background:var(--green);transition:width .5s ease}
+.wk-body{display:none;border-top:1px solid var(--line)}
+.wk.open .wk-body{display:block}
+.day{width:100%;padding:13px 16px;border-bottom:1px solid var(--line);text-align:left}
+.day:last-child{border-bottom:0}
+.day-row{display:flex;align-items:center;gap:12px;min-height:26px}
+.day-row:active{opacity:.8}
+.day-d{font-size:.75rem;font-weight:800;color:var(--txt2);min-width:34px}
+.day-t{flex:1;font-size:.85rem;line-height:1.35}
+.day-t small{display:block;color:var(--txt3);font-size:.72rem;margin-top:2px}
+.day-km{font-size:.8rem;color:var(--txt2);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+
+.f-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.f-field{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+.f-field.full{grid-column:1/-1}
+.f-field label{display:block;font-size:.66rem;font-weight:700;color:var(--txt2);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px}
+.f-field input[type=text],.f-field input[type=number],.f-field input[type=date],.f-field textarea,.f-field select{
+  width:100%;background:none;border:0;outline:none;font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums;color:var(--txt);
+  -webkit-appearance:none;appearance:none;
+}
+.f-field textarea{font-weight:500;font-size:.95rem;resize:none;min-height:56px;line-height:1.4}
+.f-field .calc{font-size:1.05rem;font-weight:800;color:var(--cyan)}
+.f-req{color:var(--pink)}
+
+.ef-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.ef-grid.tempo2{grid-template-columns:repeat(2,1fr)}
+.ef{background:var(--card2);border:1px solid var(--line);border-radius:9px;padding:6px 7px}
+.ef label{display:block;font-size:.56rem;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.ef input{width:100%;background:none;border:0;outline:none;font-size:.82rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--txt)}
+.ef.touched{border-color:var(--cyan)}
+.ef.touched label{color:var(--cyan)}
+
+.rings-wrap{display:flex;align-items:center;gap:18px}
+.rings{width:150px;height:150px;flex:none}
+.ring-track{fill:none;stroke-width:15;stroke-linecap:round;opacity:.16}
+.ring-val{fill:none;stroke-width:15;stroke-linecap:round;transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)}
+.rings-leg{flex:1}
+.rl{margin-bottom:12px}
+.rl:last-child{margin-bottom:0}
+.rl b{display:block;font-size:1.35rem;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.rl span{font-size:.72rem;font-weight:700;letter-spacing:.04em}
+
+.chart{width:100%;height:auto;display:block;margin-top:4px}
+.ax{font-size:8.5px;fill:var(--txt3);font-weight:600}
+.gl{stroke:rgba(255,255,255,.06);stroke-width:1}
+
+.kb{border-radius:var(--r);padding:14px 16px;margin-bottom:14px;font-weight:700;font-size:.9rem;display:flex;gap:10px;align-items:center;border:1px solid}
+.kb.warn{background:rgba(255,176,32,.1);border-color:rgba(255,176,32,.3);color:var(--amber)}
+.krow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);width:100%;text-align:left}
+.krow:last-child{border-bottom:0}
+.krow:active{opacity:.7}
+.kp{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.05rem;flex:none;font-variant-numeric:tabular-nums}
+.kp.p0{background:rgba(155,232,33,.14);color:var(--green)}
+.kp.p1{background:rgba(255,176,32,.16);color:var(--amber)}
+.kp.p2{background:rgba(255,69,58,.16);color:var(--red)}
+.krow .ki{flex:1;min-width:0}
+.krow .kd{font-size:.78rem;font-weight:700}
+.krow .kn{font-size:.78rem;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+
+.pstat{display:flex;gap:12px;margin-bottom:14px}
+.pstat .card{flex:1;margin:0;text-align:center;padding:16px 8px}
+.pstat .big{font-size:1.9rem}
+.prow{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+.prow:last-child{border-bottom:0}
+.prow .pi{flex:1;min-width:0}
+.prow .pl{font-size:.85rem;font-weight:700}
+.prow .pm{font-size:.7rem;color:var(--txt3);margin-top:2px;font-weight:600}
+.ptin{width:74px;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:9px 6px;text-align:center;font-weight:800;font-size:.95rem;font-variant-numeric:tabular-nums;outline:none;color:var(--txt)}
+.ptin::placeholder{color:var(--txt3);font-weight:600}
+.pout{min-width:76px;text-align:right}
+.pout b{display:block;font-size:.95rem;font-weight:800;font-variant-numeric:tabular-nums}
+.pout span{font-size:.68rem;font-weight:800}
+.pos{color:var(--green)}.neg{color:var(--red)}
+
+.bban{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px dashed rgba(255,255,255,.18);border-radius:14px;padding:11px 14px;margin-bottom:14px;font-size:.82rem;font-weight:600;color:var(--txt2)}
+.bban button{color:var(--cyan);font-weight:800;font-size:.82rem;padding:6px}
+
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;opacity:0;pointer-events:none;transition:opacity .25s}
+.backdrop.on{opacity:1;pointer-events:auto}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--card);
+  border-radius:22px 22px 0 0;border-top:1px solid var(--line);
+  max-height:90dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:8px 18px calc(var(--sab) + 22px);
+  transform:translateY(105%);transition:transform .3s cubic-bezier(.32,.72,0,1);
+}
+.sheet.on{transform:none}
+.grab{width:38px;height:5px;border-radius:3px;background:rgba(255,255,255,.2);margin:6px auto 14px}
+.sh-t{font-size:1.1rem;font-weight:800;margin-bottom:2px}
+.sh-s{font-size:.75rem;color:var(--txt2);font-weight:600;margin-bottom:12px}
+.seg{display:flex;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:3px;margin-top:12px}
+.seg button{flex:1;min-height:40px;border-radius:9px;font-size:.8rem;font-weight:800;color:var(--txt2)}
+.seg button.on{background:var(--bg);color:var(--txt);box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.seg button.on.c-done{color:var(--green)}
+.seg button.on.c-skip{color:var(--amber)}
+
+.done-pop{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.done-pop svg{width:120px;height:120px;animation:pop .55s cubic-bezier(.2,1.6,.4,1) both}
+.done-pop circle{fill:var(--green)}
+.done-pop path{stroke:#0A0A0F;stroke-width:9;stroke-linecap:round;stroke-linejoin:round;fill:none;stroke-dasharray:60;stroke-dashoffset:60;animation:draw .4s .2s ease-out forwards}
+@keyframes pop{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes draw{to{stroke-dashoffset:0}}
+.fade-out{animation:fout .4s .9s ease forwards}
+@keyframes fout{to{opacity:0}}
+
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:35;
+  height:calc(var(--tab-h) + var(--sab));padding-bottom:var(--sab);
+  display:flex;
+  background:rgba(22,22,29,.72);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);
+  border-top:1px solid var(--line);
+}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--txt3);min-height:44px}
+nav button svg{width:23px;height:23px}
+nav button span{font-size:.6rem;font-weight:700;letter-spacing:.02em}
+nav button.on{color:var(--pink)}
+nav button:active{transform:scale(.92)}
+
+.empty{text-align:center;color:var(--txt3);font-size:.85rem;padding:26px 10px;font-weight:600}
+.note-src{font-size:.7rem;color:var(--txt3);font-weight:600;margin-top:10px}
+hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
+
+/* ---- ONBOARDING WIZARD ---- */
+#onboard{position:fixed;inset:0;z-index:100;background:var(--bg);overflow-y:auto}
+.ob-wrap{max-width:480px;margin:0 auto;padding:calc(var(--sat) + 24px) 20px 40px;min-height:100dvh}
+.ob-progress{display:flex;gap:6px;margin-bottom:26px}
+.ob-progress i{flex:1;height:3px;border-radius:3px;background:var(--card2);transition:background .3s}
+.ob-progress i.on{background:var(--pink)}
+.ob-progress i.done{background:var(--green)}
+.ob-step{display:none;animation:fadein .25s ease}
+.ob-step.active{display:block}
+.ob-eyebrow{font-size:.7rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--pink);margin-bottom:8px}
+.ob-h1{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;margin-bottom:6px;line-height:1.25}
+.ob-sub{font-size:.85rem;color:var(--txt2);line-height:1.5;margin-bottom:24px}
+.ob-field{margin-bottom:16px}
+.ob-field label{display:block;font-size:.72rem;font-weight:700;color:var(--txt2);letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px}
+.ob-field input[type=date],.ob-field input[type=text],.ob-field input[type=number]{
+  width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+  font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums;color:var(--txt);outline:none;
+}
+.ob-field input:focus{border-color:var(--pink)}
+.ob-row3{display:flex;gap:10px;align-items:end}
+.ob-colon{text-align:center;font-weight:800;color:var(--txt3);padding-bottom:14px}
+.ob-chiprow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.ob-chip{padding:10px 16px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:.85rem;font-weight:700;color:var(--txt2)}
+.ob-chip.on{background:var(--pink);border-color:var(--pink);color:#fff}
+.ob-vdot{display:flex;align-items:center;gap:16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin:20px 0;opacity:0;max-height:0;overflow:hidden;transition:opacity .4s ease,max-height .4s ease}
+.ob-vdot.show{opacity:1;max-height:200px;margin:20px 0}
+.ob-vring{width:64px;height:64px;flex:none}
+.ob-vtrack{fill:none;stroke:rgba(255,255,255,.1);stroke-width:6}
+.ob-vval{fill:none;stroke:var(--cyan);stroke-width:6;stroke-linecap:round;transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset .5s cubic-bezier(.4,0,.2,1)}
+.ob-vnum{font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums}
+.ob-vlbl{font-size:.74rem;color:var(--txt2);line-height:1.4;margin-top:2px}
+.ob-icard{width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+.ob-icard.on{border-color:var(--cyan);background:var(--card2)}
+.ob-icard b{display:block;font-size:.95rem;margin-bottom:4px}
+.ob-icard span{display:block;font-size:.76rem;color:var(--txt2);line-height:1.4}
+.ob-icard .ob-tag{display:inline-block;font-size:.62rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--txt3);margin-top:6px}
+.ob-btnrow{display:flex;gap:10px;margin-top:24px}
+.ob-err{color:var(--red);font-size:.78rem;font-weight:600;margin-top:6px;min-height:16px}
+.ob-summary{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:14px}
+.ob-summary.warn{border-color:rgba(255,176,32,.35)}
+.ob-summary.ok{border-color:rgba(155,232,33,.35)}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+
+<div id="onboard"></div>
+
+<header id="appHeader" style="display:none">
+  <div>
+    <div class="h-title">Tempo<span style="color:var(--pink)">RA</span></div>
+    <div class="h-sub" id="h-sub"></div>
+  </div>
+  <button class="h-gear" id="btn-gear" aria-label="Podešavanja">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.65 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01A1.7 1.7 0 0 0 10.05 3V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01c.26.63.87 1.03 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51.98z"/></svg>
+  </button>
+</header>
+
+<main id="appMain" style="display:none">
+  <section class="page" id="pg-danas"></section>
+  <section class="page" id="pg-plan"></section>
+  <section class="page" id="pg-prog"></section>
+  <section class="page" id="pg-koleno"></section>
+  <section class="page" id="pg-pred"></section>
+</main>
+
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet"></div>
+
+<nav id="tabbar" style="display:none">
+  <button data-pg="danas" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 9.5h17M8 3v3.5M16 3v3.5"/><circle cx="12" cy="15" r="2.4" fill="currentColor" stroke="none"/></svg>
+    <span>Danas</span>
+  </button>
+  <button data-pg="plan">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M8.5 6h11M8.5 12h11M8.5 18h11"/><circle cx="4.4" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="4.4" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="4.4" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>
+    <span>Plan</span>
+  </button>
+  <button data-pg="prog">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M12 3a9 9 0 1 1-9 9" stroke-linecap="round"/><path d="M12 7.5a4.5 4.5 0 1 1-4.5 4.5" stroke-linecap="round" opacity=".55"/></svg>
+    <span>Progres</span>
+  </button>
+  <button data-pg="koleno">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.2-5 3.6 10 2.2-5H21"/></svg>
+    <span>Koleno</span>
+  </button>
+  <button data-pg="pred">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h13l-2.5 4L18 12H5"/></svg>
+    <span>Trka</span>
+  </button>
+</nav>
+
+<script src="./engine.js"></script>
+<script>
+'use strict';
+/* ============ KONSTANTE ============ */
+const SCHEMA=1, LS_KEY='sub19v3-v1';
+const DOW=['Pon','Uto','Sre','Čet','Pet','Sub','Ned'];
+const DOWL=['ponedeljak','utorak','sreda','četvrtak','petak','subota','nedelja'];
+const MES=['januara','februara','marta','aprila','maja','juna','jula','avgusta','septembra','oktobra','novembra','decembra'];
+const PB_SANITY={ 5000:[720,5999], 10000:[1500,5999], 21097.5:[3300,14400], 42195:[6900,25200] };
+const HOURS_FROM=21097;
+
+/* ============ POMOĆNE (čiste funkcije) ============ */
+const pad2=n=>String(n).padStart(2,'0');
+function s2d(s){const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c);}
+function d2s(d){return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());}
+function addD(s,n){const d=s2d(s);d.setDate(d.getDate()+n);return d2s(d);}
+function diffD(a,b){return Math.round((s2d(b)-s2d(a))/86400000);}
+function todayStr(){return d2s(new Date());}
+function fmtD(s){const d=s2d(s);return pad2(d.getDate())+'.'+pad2(d.getMonth()+1)+'.';}
+function fmtDY(s){const d=s2d(s);return pad2(d.getDate())+'.'+pad2(d.getMonth()+1)+'.'+d.getFullYear()+'.';}
+function fmtDL(s){const d=s2d(s);const wd=(d.getDay()+6)%7;return DOWL[wd].charAt(0).toUpperCase()+DOWL[wd].slice(1)+', '+d.getDate()+'. '+MES[d.getMonth()];}
+function fmtNum(n,dec=1){const v=(Math.round(n*10**dec)/10**dec).toFixed(dec).replace(/\.?0+$/,'');return v.replace('.',',');}
+function fmtKm(n){return fmtNum(n,1);}
+function fmtClock(sec){sec=Math.round(sec);const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return h?h+':'+pad2(m)+':'+pad2(s):m+':'+pad2(s);}
+function fmtTempo(sec){if(sec==null||!isFinite(sec))return'—';return fmtClock(sec);}
+function parseTimeStr(str){
+  if(!str)return null;
+  const s=String(str).trim().replace(/[,.]/g,':');
+  if(/^\d{3,6}$/.test(s)){
+    const se=+s.slice(-2);if(se>59)return null;
+    const rest=s.slice(0,-2);
+    if(rest.length<=2)return(+rest)*60+se;
+    const mi=+rest.slice(-2);if(mi>59)return null;
+    return(+rest.slice(0,-2))*3600+mi*60+se;
+  }
+  const m=s.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/);
+  if(!m)return null;
+  let h=0,mi,se;
+  if(m[3]!=null){h=+m[1];mi=+m[2];se=+m[3];}else{mi=+m[1];se=+m[2];}
+  if(se>59||mi>(m[3]!=null?59:99))return null;
+  return h*3600+mi*60+se;
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function clampDigits(v,n){ v=String(v).replace(/\D/g,''); return v.slice(0,n); }
+function plDan(n){const m=n%10,h=n%100;return(m===1&&h!==11)?'dan':'dana';}
+const $=s=>document.querySelector(s);
+const $$=s=>Array.from(document.querySelectorAll(s));
+
+/* ============ STANJE + STORAGE ============ */
+let LS_OK=true;try{localStorage.setItem('__t','1');localStorage.removeItem('__t');}catch(e){LS_OK=false;}
+let MEM=null;
+function seedState(){return {
+ v:SCHEMA,
+ meta:null,            /* onboarding ulazi: {startDate,raceDate,pb,weeklyKm,runDays,quality,lrDow,qDows,intensity,goalSec} */
+ plan:null,            /* generatePlan() izlaz — jedini izvor rasporeda dok se ne rekalibriše */
+ vdotSmoothed:null,    /* tekuća zaglađena forma za adaptivnu rekalibraciju */
+ log:{},               /* trening unosi, isti oblik kao v2 */
+ knee:[],              /* {id,date,act,pain,note} — bez pragova/preporuka (v3 odluka) */
+ kg:[],                /* {date,kg} */
+ weightTarget:null,    /* {startKg,goalKg} — opciono, korisnik unosi u Podešavanjima */
+ pred:{},              /* ručni tempo unosi za redove bez lap podataka (nema Strave u v3 još) */
+ ui:{firstRun:null,lastBackup:null,snooze:null}
+};}
+function migrate(o){
+  if(!o||typeof o!=='object')return null;
+  if(o.meta===undefined)return null; /* nije v3 fajl */
+  o.v=o.v||1;
+  o.log=o.log||{};o.knee=o.knee||[];o.kg=o.kg||[];o.pred=o.pred||{};
+  o.weightTarget=o.weightTarget||null;o.vdotSmoothed=o.vdotSmoothed!=null?o.vdotSmoothed:null;
+  o.ui=Object.assign({firstRun:null,lastBackup:null,snooze:null},o.ui||{});
+  o.v=SCHEMA;
+  return o;
+}
+function loadState(){
+  let raw=null;
+  if(LS_OK)raw=localStorage.getItem(LS_KEY);else raw=MEM;
+  if(raw){try{const o=migrate(JSON.parse(raw));if(o)return o;}catch(e){}}
+  const s=seedState();s.ui.firstRun=todayStr();
+  return s;
+}
+function save(){const j=JSON.stringify(S);if(LS_OK)localStorage.setItem(LS_KEY,j);else MEM=j;}
+
+let S=loadState();
+const TODAY=todayStr();
+
+/* ============ IZVEDENE STRUKTURE IZ PLANA (rade nad S.plan, ne nad konstantom) ============ */
+let BY_ID={},BY_DATE={},DATED=[],TOTAL_TR=0;
+function indexPlan(){
+  BY_ID={};BY_DATE={};DATED=[];TOTAL_TR=0;
+  if(!S.plan)return;
+  S.plan.weeks.forEach(w=>{
+    w.days.forEach(d=>{
+      d.id='n'+w.w+'d'+d.dow;
+      d.weekNum=w.w;
+      d.date=addD(S.meta.startDate, (w.w-1)*7 + (d.dow-1));
+      BY_ID[d.id]=d;
+      if(!d.rest){BY_DATE[d.date]=d;DATED.push(d);TOTAL_TR++;}
+      else {BY_DATE[d.date]=d;} /* i dan odmora se mapira, samo se ne broji u TOTAL_TR */
+    });
+  });
+  DATED.sort((a,b)=>a.date<b.date?-1:1);
+}
+function weekPlanKm(w){return w.vol;}
+function weekOf(dateStr){
+  if(!S.plan)return null;
+  for(const w of S.plan.weeks){
+    const start=addD(S.meta.startDate,(w.w-1)*7);
+    const end=addD(start,6);
+    if(dateStr>=start&&dateStr<=end)return w;
+  }
+  return null;
+}
+function tagName(t){return{lako:'Lako',tempo:'Tempo',int:'Intervali',lr:'Dugo (LR)',snaga:'Snaga',odmor:'Odmor',trka:'TRKA'}[t]||t;}
+function weekByNum(n){return S.plan.weeks.find(w=>w.w===n);}
+function sessionKind(d){return d.session?d.session.kind:tagName(d.tag);}
+
+/*==DOM==*/
+
+/* ============ STATISTIKE (nad generisanim planom) ============ */
+function stFor(id){const l=S.log[id];return l&&l.status?l.status:'pending';}
+function realKmDay(d){const l=S.log[d.id];if(!l||l.status!=='done')return 0;return l.km!=null?l.km:(d.km||0);}
+function weekRealKm(w){return w.days.reduce((s,d)=>s+realKmDay(d),0);}
+function weekDone(w){return w.days.filter(d=>!d.rest&&stFor(d.id)==='done').length;}
+function weekCountable(w){return w.days.filter(d=>!d.rest).length;}
+function totalDone(){return S.plan?S.plan.weeks.reduce((n,w)=>n+weekDone(w),0):0;}
+function streak(today){
+  if(!S.plan)return 0;
+  let cur=today,n=0;
+  const t=BY_DATE[today];
+  if(t&&!t.rest&&stFor(t.id)!=='done')cur=addD(today,-1);
+  const start=S.meta.startDate, race=S.meta.raceDate;
+  while(cur>=start){
+    const d=BY_DATE[cur];
+    if(!d){if(cur>race){cur=addD(cur,-1);continue;}break;}
+    if(d.rest){n++;}
+    else if(stFor(d.id)==='done'){n++;}
+    else break;
+    cur=addD(cur,-1);
+  }
+  return n;
+}
+function backupDue(today){
+  const base=S.ui.lastBackup||S.ui.firstRun;
+  if(!base)return false;
+  if(S.ui.snooze&&today<S.ui.snooze)return false;
+  return today>=addD(base,7);
+}
+function totalPlanKm(){return S.plan?S.plan.weeks.reduce((s,w)=>s+w.vol,0):0;}
+
+/* ============ REKALIBRACIJA — pomoćne za UI tok ============ */
+/* Nalazi indeks tekuće nedelje (1-indeksirano) u odnosu na TODAY, za recalibratedPlan(). */
+function currentWeekIdx(){
+  const w=weekOf(TODAY);
+  return w?w.w:1;
+}
+/* Poziva se posle unosa TEMPA RADNOG DELA na kvalitetnom danu (posebno polje,
+   NE prosek celog treninga — prosek uključuje WU/CD i bez Strava lap podataka
+   nema načina da se radni deo izoluje iz ukupne distance/vremena, pa bi
+   rekalibracija dobila lažno spor signal). Vraća null ako dan nije kvalitetan
+   ili tempo radnog dela nije unet. */
+function computeRecalPreview(day, workPaceSec){
+  if(!day.session || !workPaceSec) return null;
+  const kind=day.session.kind;
+  /* Pouzdanost/zona po KIND-u (stvarna struktura sesije), ne po tag-u (koji je
+     samo UI boja). Broken tempo i fartlek IMAJU pauze/float — ista niska
+     pouzdanost kao intervali, bez obzira što se tag='tempo' koristi za boju. */
+  const lowConf = kind==='Intervali' || kind==='Fartlek' || kind==='Tempo (broken)';
+  const zone = (kind==='Tempo' || kind==='Tempo (broken)' || kind==='Progresivno') ? 'T' : 'I';
+  const sessType = lowConf ? 'int' : 'tempo';
+  const baseline = S.vdotSmoothed!=null ? S.vdotSmoothed : S.meta._vdotAtGen;
+  const r = recalibrate(baseline, workPaceSec, zone, sessType);
+  const wIdx = currentWeekIdx();
+  const recal = recalibratedPlan(planInputFromMeta(), wIdx, r.vdotNew, S.plan.weeks);
+  if(recal.error) return null;
+  return { ...r, wIdx, recal };
+}
+function planInputFromMeta(){
+  const m=S.meta;
+  return { startDate:m.startDate, raceDate:m.raceDate, pb:m.pb, weeklyKm:m.weeklyKm,
+    runDays:m.runDays, quality:m.quality, lrDow:m.lrDow, qDows:m.qDows, intensity:m.intensity, goalSec:m.goalSec };
+}
+function applyRecal(recal, newVdot, wIdx){
+  /* Zamenjuje SAMO nedelje >= wIdx; istorija (odrađeni dani pre toga) netaknuta. */
+  const kept = S.plan.weeks.filter(w=>w.w<wIdx);
+  S.plan = { weeks:[...kept, ...recal.weeks], pred:recal.pred, qs:recal.qs, meta:{...S.plan.meta, ...recal.meta} };
+  S.vdotSmoothed = newVdot;
+  indexPlan();
+  save();
+}
+
+/*==DOM==*/
+
+/* ============ ONBOARDING WIZARD (adaptirano iz testiranog wizard.html) ============ */
+const TOTAL_STEPS=4;
+let obStep=1;
+let wiz={ raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
+function pbUsesHours(){ return wiz.pbDist>=HOURS_FROM; }
+function pbTotalSec(){
+  const h=pbUsesHours()?(+wiz.pbH||0):0, m=+wiz.pbMin, s=+wiz.pbSec;
+  if(wiz.pbMin===''||wiz.pbSec===''||isNaN(m)||isNaN(s)||s>59) return null;
+  if(pbUsesHours()&&m>59) return null;
+  const t=h*3600+m*60+s;
+  return t>0?t:null;
+}
+function pbSanityOk(){
+  const t=pbTotalSec(); if(t==null) return false;
+  const [lo,hi]=PB_SANITY[wiz.pbDist]||[60,99999];
+  return t>=lo&&t<=hi;
+}
+function pbSanityMsg(){
+  const t=pbTotalSec();
+  if(t==null) return '';
+  const [lo,hi]=PB_SANITY[wiz.pbDist]||[0,0];
+  if(t<lo) return 'Vreme je brže od realnog opsega za izabranu distancu — proveri unos.';
+  if(t>hi) return 'Vreme je sporije od opsega koji plan podržava za tu distancu — proveri unos.';
+  return '';
+}
+
+function renderOnboard(){
+  const el=$('#onboard');
+  el.innerHTML=`<div class="ob-wrap">
+    <div class="ob-progress" id="ob-progress"></div>
+    <div class="ob-step active" data-step="1">
+      <div class="ob-eyebrow">Korak 1 / 4</div>
+      <div class="ob-h1">Kad je trka?</div>
+      <div class="ob-sub">Plan se računa unazad od ovog datuma. Trenutna verzija generatora cilja isključivo 5&nbsp;km trku.</div>
+      <div class="ob-field"><label>Datum trke</label><input type="date" id="in-raceDate" min="${todayStr()}"></div>
+      <div class="ob-err" id="ob-err-1"></div>
+    </div>
+    <div class="ob-step" data-step="2">
+      <div class="ob-eyebrow">Korak 2 / 4</div>
+      <div class="ob-h1">Tvoj skorašnji rezultat</div>
+      <div class="ob-sub">Bilo koja skorija trka na poznatoj distanci. Iz ovoga se računaju svi tempi u planu.</div>
+      <div class="ob-field"><label>Distanca</label>
+        <div class="ob-chiprow" id="pbDistChips">
+          <button type="button" class="ob-chip on" data-v="5000">5 km</button>
+          <button type="button" class="ob-chip" data-v="10000">10 km</button>
+          <button type="button" class="ob-chip" data-v="21097.5">Polumaraton</button>
+          <button type="button" class="ob-chip" data-v="42195">Maraton</button>
+        </div>
+      </div>
+      <div class="ob-field"><label>Vreme</label>
+        <div class="ob-row3">
+          <div id="pbHwrap" style="display:none;flex:1"><input type="number" id="in-pbH" placeholder="h" inputmode="numeric"></div>
+          <div class="ob-colon" id="pbHcolon" style="display:none">:</div>
+          <div style="flex:1"><input type="number" id="in-pbMin" placeholder="min" inputmode="numeric"></div>
+          <div class="ob-colon">:</div>
+          <div style="flex:1"><input type="number" id="in-pbSec" placeholder="sek" inputmode="numeric"></div>
+        </div>
+      </div>
+      <div class="ob-vdot" id="vdotWrap">
+        <svg class="ob-vring" viewBox="0 0 64 64">
+          <circle class="ob-vtrack" cx="32" cy="32" r="27"/>
+          <circle class="ob-vval" id="vdotArc" cx="32" cy="32" r="27" stroke-dasharray="169.6" stroke-dashoffset="169.6"/>
+        </svg>
+        <div><div class="ob-vnum" id="vdotNum">—</div><div class="ob-vlbl">VDOT — ovaj broj određuje svaki tempo u planu</div></div>
+      </div>
+      <div class="ob-err" id="ob-err-2"></div>
+    </div>
+    <div class="ob-step" data-step="3">
+      <div class="ob-eyebrow">Korak 3 / 4</div>
+      <div class="ob-h1">Kako trčiš nedeljno?</div>
+      <div class="ob-sub">Prosečna nedeljna kilometraža poslednje 2–3 nedelje, i koliko dana želiš da trčiš.</div>
+      <div class="ob-field"><label>Nedeljno (km)</label><input type="number" id="in-weeklyKm" placeholder="npr. 22" min="5" max="120"></div>
+      <div class="ob-field"><label>Dana trčanja nedeljno</label>
+        <div class="ob-chiprow" id="runDaysChips">
+          <button type="button" class="ob-chip" data-v="2">2</button><button type="button" class="ob-chip" data-v="3">3</button>
+          <button type="button" class="ob-chip on" data-v="4">4</button><button type="button" class="ob-chip" data-v="5">5</button>
+          <button type="button" class="ob-chip" data-v="6">6</button><button type="button" class="ob-chip" data-v="7">7</button>
+        </div>
+      </div>
+      <div class="ob-field"><label>Dan za dugo trčanje (LR)</label>
+        <div class="ob-chiprow" id="lrDowChips">
+          <button type="button" class="ob-chip" data-v="1">Pon</button><button type="button" class="ob-chip" data-v="2">Uto</button>
+          <button type="button" class="ob-chip" data-v="3">Sre</button><button type="button" class="ob-chip" data-v="4">Čet</button>
+          <button type="button" class="ob-chip" data-v="5">Pet</button><button type="button" class="ob-chip" data-v="6">Sub</button>
+          <button type="button" class="ob-chip on" data-v="7">Ned</button>
+        </div>
+      </div>
+      <div class="ob-err" id="ob-err-3"></div>
+    </div>
+    <div class="ob-step" data-step="4">
+      <div class="ob-eyebrow">Korak 4 / 4</div>
+      <div class="ob-h1">Koliki intenzitet?</div>
+      <div class="ob-sub">Koliko brzo forma treba da raste kroz plan.</div>
+      <div class="ob-field"><label>Kvalitetnih (bržih) treninga nedeljno</label>
+        <div class="ob-chiprow" id="qualityChips">
+          <button type="button" class="ob-chip" data-v="1">1</button>
+          <button type="button" class="ob-chip on" data-v="2">2</button>
+        </div>
+        <div class="ob-sub" style="margin:8px 0 0;font-size:.72rem">Na ≤3 dana trčanja plan forsira 1 kvalitet.</div>
+      </div>
+      <div class="ob-field"><label>Dani za kvalitet — opciono (prazno = automatski)</label>
+        <div class="ob-chiprow" id="qDayChips">
+          <button type="button" class="ob-chip" data-v="1">Pon</button><button type="button" class="ob-chip" data-v="2">Uto</button>
+          <button type="button" class="ob-chip" data-v="3">Sre</button><button type="button" class="ob-chip" data-v="4">Čet</button>
+          <button type="button" class="ob-chip" data-v="5">Pet</button><button type="button" class="ob-chip" data-v="6">Sub</button>
+          <button type="button" class="ob-chip" data-v="7">Ned</button>
+        </div>
+      </div>
+      <div class="ob-field">
+        <button type="button" class="ob-icard" data-v="kons"><b>Konzervativno</b><span>Postepen, oprezan rast forme.</span><span class="ob-tag">Danielsova smernica</span></button>
+        <button type="button" class="ob-icard on" data-v="std"><b>Standardno</b><span>Uobičajen tempo napretka za trenirane trkače.</span><span class="ob-tag">Danielsova smernica</span></button>
+        <button type="button" class="ob-icard" data-v="agr"><b>Agresivno</b><span>Brz rast — realno uglavnom uz nizak trenažni staž ili paralelan gubitak telesne mase. Za većinu treniranih trkača preambiciozno.</span><span class="ob-tag">Kalibrisano na jedan dokumentovan slučaj</span></button>
+      </div>
+      <div class="ob-field"><label>Ciljno vreme (opciono)</label>
+        <div class="ob-row3">
+          <div><input type="number" id="in-goalMin" placeholder="min" min="0" max="60"></div>
+          <div class="ob-colon">:</div>
+          <div><input type="number" id="in-goalSec" placeholder="sek" min="0" max="59"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ob-btnrow">
+      <button type="button" class="btn ghost" id="obBack" style="display:none">Nazad</button>
+      <button type="button" class="btn" id="obNext">Dalje</button>
+    </div>
+  </div>`;
+  bindOnboardEvents();
+  goObStep(1);
+}
+function renderObProgress(){
+  const el=$('#ob-progress'); el.innerHTML='';
+  for(let i=1;i<=TOTAL_STEPS;i++){
+    const d=document.createElement('i');
+    if(i<obStep) d.className='done'; else if(i===obStep) d.className='on';
+    el.appendChild(d);
+  }
+}
+function obStepValid(n){
+  if(n===1) return !!wiz.raceDate;
+  if(n===2) return pbSanityOk();
+  if(n===3) return wiz.weeklyKm!==''&&+wiz.weeklyKm>0;
+  return true;
+}
+function goObStep(n){
+  obStep=n;
+  $$('.ob-step').forEach(s=>s.classList.toggle('active', +s.dataset.step===n));
+  $('#obBack').style.display=n>1?'':'none';
+  $('#obNext').textContent=n===TOTAL_STEPS?'Generiši plan':'Dalje';
+  renderObProgress();
+  $('#obNext').disabled=!obStepValid(n);
+}
+function syncHoursUI(){
+  const on=pbUsesHours();
+  $('#pbHwrap').style.display=on?'':'none';
+  $('#pbHcolon').style.display=on?'':'none';
+  if(!on&&wiz.pbH!==''){
+    const folded=(+wiz.pbH||0)*60+(+wiz.pbMin||0);
+    wiz.pbH='';$('#in-pbH').value='';
+    if(folded>0&&folded<=99){ wiz.pbMin=String(folded); $('#in-pbMin').value=wiz.pbMin; }
+  }
+}
+const VDOT_CIRC=169.6;
+function updateVdotPreview(){
+  const wrap=$('#vdotWrap');
+  const sec=pbTotalSec();
+  if(sec==null||!pbSanityOk()){ wrap.classList.remove('show'); return; }
+  const vd=vdotFromRace(wiz.pbDist, sec);
+  $('#vdotNum').textContent=vd.toFixed(1);
+  const frac=Math.max(0,Math.min(1,(vd-25)/(65-25)));
+  $('#vdotArc').style.strokeDashoffset=VDOT_CIRC*(1-frac);
+  wrap.classList.add('show');
+}
+function bindOnboardEvents(){
+  $('#in-raceDate').addEventListener('input',e=>{ wiz.raceDate=e.target.value; goObStep(obStep); });
+  $$('#pbDistChips .ob-chip').forEach(c=>c.addEventListener('click',()=>{
+    $$('#pbDistChips .ob-chip').forEach(x=>x.classList.remove('on')); c.classList.add('on');
+    wiz.pbDist=+c.dataset.v; syncHoursUI(); goObStep(obStep); updateVdotPreview();
+  }));
+  $('#in-pbH').addEventListener('input',e=>{ e.target.value=clampDigits(e.target.value,1); wiz.pbH=e.target.value; goObStep(obStep); updateVdotPreview(); });
+  $('#in-pbMin').addEventListener('input',e=>{ e.target.value=clampDigits(e.target.value,2); wiz.pbMin=e.target.value; goObStep(obStep); updateVdotPreview(); });
+  $('#in-pbSec').addEventListener('input',e=>{ e.target.value=clampDigits(e.target.value,2); wiz.pbSec=e.target.value; goObStep(obStep); updateVdotPreview(); });
+  $('#in-weeklyKm').addEventListener('input',e=>{ wiz.weeklyKm=e.target.value; goObStep(obStep); });
+  $$('#runDaysChips .ob-chip').forEach(c=>c.addEventListener('click',()=>{
+    $$('#runDaysChips .ob-chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); wiz.runDays=+c.dataset.v;
+  }));
+  $$('#lrDowChips .ob-chip').forEach(c=>c.addEventListener('click',()=>{
+    $$('#lrDowChips .ob-chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); wiz.lrDow=+c.dataset.v;
+    const i=wiz.qDays.indexOf(wiz.lrDow);
+    if(i>=0){ wiz.qDays.splice(i,1); const b=document.querySelector(`#qDayChips .ob-chip[data-v="${wiz.lrDow}"]`); if(b)b.classList.remove('on'); }
+  }));
+  $$('#qualityChips .ob-chip').forEach(c=>c.addEventListener('click',()=>{
+    $$('#qualityChips .ob-chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); wiz.quality=+c.dataset.v;
+    while(wiz.qDays.length>wiz.quality){ const rm=wiz.qDays.shift(); const b=document.querySelector(`#qDayChips .ob-chip[data-v="${rm}"]`); if(b)b.classList.remove('on'); }
+  }));
+  $$('#qDayChips .ob-chip').forEach(c=>c.addEventListener('click',()=>{
+    const v=+c.dataset.v; if(v===wiz.lrDow) return;
+    const i=wiz.qDays.indexOf(v);
+    if(i>=0){ wiz.qDays.splice(i,1); c.classList.remove('on'); return; }
+    wiz.qDays.push(v); c.classList.add('on');
+    while(wiz.qDays.length>wiz.quality){ const rm=wiz.qDays.shift(); const b=document.querySelector(`#qDayChips .ob-chip[data-v="${rm}"]`); if(b)b.classList.remove('on'); }
+  }));
+  $$('.ob-icard').forEach(c=>c.addEventListener('click',()=>{
+    $$('.ob-icard').forEach(x=>x.classList.remove('on')); c.classList.add('on'); wiz.intensity=c.dataset.v;
+  }));
+  $('#in-goalMin').addEventListener('input',e=>{ e.target.value=clampDigits(e.target.value,2); wiz.goalMin=e.target.value; });
+  $('#in-goalSec').addEventListener('input',e=>{ e.target.value=clampDigits(e.target.value,2); wiz.goalSec=e.target.value; });
+  $('#obBack').addEventListener('click',()=>goObStep(obStep-1));
+  $('#obNext').addEventListener('click',()=>{
+    if(!obStepValid(obStep))return;
+    if(obStep<TOTAL_STEPS){ goObStep(obStep+1); return; }
+    finishOnboarding();
+  });
+}
+function finishOnboarding(){
+  const pbSec=pbTotalSec();
+  const goalSec=(wiz.goalMin!==''&&wiz.goalSec!=='') ? (+wiz.goalMin)*60+(+wiz.goalSec) : null;
+  const meta={
+    startDate: todayStr(), raceDate: wiz.raceDate,
+    pb:{ distM:wiz.pbDist, sec:pbSec }, weeklyKm:+wiz.weeklyKm,
+    runDays:wiz.runDays, quality:wiz.quality, lrDow:wiz.lrDow, qDows:wiz.qDays.slice(),
+    intensity:wiz.intensity, goalSec
+  };
+  const plan=generatePlan(meta);
+  if(plan.error){ $('#ob-err-1').textContent=plan.error; goObStep(1); return; }
+  S.meta=meta; S.meta._vdotAtGen=plan.meta.vdot0;
+  S.plan=plan; S.vdotSmoothed=plan.meta.vdot0;
+  save(); indexPlan();
+  $('#onboard').style.display='none';
+  $('#appHeader').style.display='';$('#appMain').style.display='';$('#tabbar').style.display='';
+  renderHeader(); setPage('danas');
+}
+
+/*==DOM==*/
+
+/* ============ APP SHELL ============ */
+const PAGES={danas:renderDanas,plan:renderPlan,prog:renderProg,koleno:renderKnee,pred:renderPred};
+let ACTIVE='danas';
+const openW=new Set();
+
+function renderHeader(){
+  let t;
+  if(!S.plan){t='';}
+  else if(TODAY<S.meta.startDate)t='Start uskoro · Trka: '+fmtDY(S.meta.raceDate);
+  else if(TODAY>S.meta.raceDate)t='Plan završen · Trka: '+fmtDY(S.meta.raceDate);
+  else{
+    const w=weekOf(TODAY),dd=diffD(TODAY,S.meta.raceDate);
+    t=(w?'Nedelja '+w.w+' / '+S.plan.weeks.length+' · ':'')+(dd===0?'DANAS JE TRKA 🏁':dd+' '+plDan(dd)+' do trke');
+  }
+  $('#h-sub').textContent=t;
+}
+function setPage(p){
+  ACTIVE=p;
+  $$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.pg===p));
+  $$('.page').forEach(x=>x.classList.remove('active'));
+  $('#pg-'+p).classList.add('active');
+  PAGES[p]();
+  window.scrollTo(0,0);
+}
+
+/* ---------- SHEET (bottom modal) ---------- */
+function openSheet(html){
+  $('#sheet').innerHTML=`<div class="grab"></div>`+html;
+  $('#sheet').classList.add('on');$('#backdrop').classList.add('on');
+  document.body.style.overflow='hidden';
+  $('#sheet').scrollTop=0;
+}
+function closeSheet(){
+  $('#sheet').classList.remove('on');$('#backdrop').classList.remove('on');
+  document.body.style.overflow='';
+  PAGES[ACTIVE]();renderHeader();
+}
+
+/* ---------- DANAS ---------- */
+function renderDanas(){
+  const el=$('#pg-danas');
+  if(!S.plan){el.innerHTML=`<div class="empty">Plan nije generisan.</div>`;return;}
+  const dd=diffD(TODAY,S.meta.raceDate),st=streak(TODAY);
+  let h='';
+  if(backupDue(TODAY))h+=`<div class="bban"><span style="flex:1">Uradi backup podataka.</span><button id="bb-do">Izvezi</button><button id="bb-later" style="color:var(--txt3)">Kasnije</button></div>`;
+  h+=`<div class="hero">
+    <div class="card"><div class="big" style="color:var(--pink)">${dd>0?dd:(dd===0?'🏁':'✓')}</div><div class="big-sub">${dd>0?plDan(dd)+' do trke':(dd===0?'danas je trka':'trka je prošla')}</div><div class="big-sub" style="color:var(--txt3)">${fmtDY(S.meta.raceDate)}</div></div>
+    <div class="card"><div class="big" style="color:var(--green)">${st}</div><div class="big-sub">${plDan(st)} po planu</div><div class="big-sub" style="color:var(--txt3)">🔥 streak</div></div>
+  </div>`;
+  h+=`<div style="font-size:.8rem;color:var(--txt2);font-weight:700;margin:2px 2px 10px">${fmtDL(TODAY)}</div>`;
+  const d=BY_DATE[TODAY];
+  if(!d){
+    if(TODAY<S.meta.startDate)h+=`<div class="card empty">Plan počinje ${fmtDY(S.meta.startDate)}.</div>`;
+    else h+=`<div class="card empty">Plan je završen.</div>`;
+  }else if(d.rest){
+    h+=`<div class="card"><span class="tag odmor">Odmor</span><div class="desc">Dan odmora po planu.</div>${nextLine(TODAY)}</div>`;
+  }else{
+    h+=dayCard(d);
+  }
+  el.innerHTML=h;
+  if(d&&!d.rest)bindDayCard(el,d);
+  const b1=$('#bb-do'),b2=$('#bb-later');
+  if(b1)b1.onclick=exportBackup;
+  if(b2)b2.onclick=()=>{S.ui.snooze=addD(TODAY,7);save();renderDanas();};
+}
+function nextLine(from){
+  const nx=DATED.find(x=>x.date>from);
+  return nx?`<div class="note-src">Sledeći trening: ${DOW[nx.dow-1]} ${fmtD(nx.date)} — ${sessionKind(nx)}${nx.km?' · '+fmtKm(nx.km)+' km':''}</div>`:'';
+}
+function dayCard(d){
+  const s=stFor(d.id);
+  let c=`<div class="card" id="tcard">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <span class="tag ${d.tag}">${sessionKind(d)}</span>
+      <span class="st ${s}">${s==='done'?'Odrađen':s==='skip'?'Preskočen':'Predstoji'}</span>
+    </div>
+    <div style="font-size:.72rem;color:var(--txt2);font-weight:700;margin-bottom:8px">N${d.weekNum} · ${DOW[d.dow-1]} ${fmtD(d.date)}</div>
+    <div class="desc">${esc(d.desc)}</div>`;
+  const wk=weekByNum(d.weekNum);
+  c+=`<div class="meta">${d.km!=null?`<div><b>${fmtKm(d.km)} km</b>plan</div>`:''}<div><b>${fmtKm(wk.vol)} km</b>nedelja N${wk.w}</div><div><b>${weekDone(wk)}/${weekCountable(wk)}</b>treninga</div></div>`;
+  if(s==='pending')c+=`<div class="btnrow"><button class="btn" data-a="done">Završi trening</button><button class="btn ghost" data-a="skip">Preskoči</button></div>`;
+  else if(s==='skip')c+=`<div class="btnrow"><button class="btn ghost" data-a="done">Ipak sam odradio</button><button class="btn ghost sm" data-a="pending">Vrati</button></div>`;
+  else c+=formHTML(d);
+  c+=`</div>`;
+  return c;
+}
+function bindDayCard(root,d){
+  root.querySelectorAll('#tcard [data-a]').forEach(b=>{
+    b.onclick=()=>{
+      const a=b.dataset.a;
+      if(a==='skip'&&!confirm('Označi trening kao preskočen?'))return;
+      const l=S.log[d.id]||(S.log[d.id]={});
+      l.status=a;
+      if(a==='done'&&!l.ts)l.ts=d.date;
+      save();
+      if(a==='done')donePop();
+      renderDanas();
+    };
+  });
+  bindForm(root,d);
+}
+
+/* ---------- FORMA (autosave) ---------- */
+function formHTML(d){
+  const l=S.log[d.id]||{};
+  const opt=(sel,from,to)=>{let o=`<option value="">—</option>`;for(let i=from;i<=to;i++)o+=`<option value="${i}"${sel===i?' selected':''}>${i}</option>`;return o;};
+  const tempo=(l.km&&l.sec)?fmtTempo(l.sec/l.km)+' /km':'—';
+  let f=`<div class="f-grid" data-day="${d.id}">
+    <div class="f-field"><label>Distanca (km) <span class="f-req">*</span></label><input type="text" inputmode="decimal" data-f="km" value="${l.km!=null?String(l.km).replace('.',','):''}" placeholder="npr. 8"></div>
+    <div class="f-field"><label>Vreme <span class="f-req">*</span></label><input type="text" inputmode="numeric" data-f="sec" value="${l.sec?fmtClock(l.sec):''}" placeholder="4233 = 42:33"></div>
+    <div class="f-field"><label>Pros. tempo</label><div class="calc" data-tempo>${tempo}</div></div>
+    <div class="f-field"><label>Pros. puls</label><input type="text" inputmode="numeric" data-f="hr" value="${l.hr!=null?l.hr:''}" placeholder="bpm"></div>
+    <div class="f-field"><label>RPE (1–10)</label><select data-f="rpe">${opt(l.rpe,1,10)}</select></div>
+    <div class="f-field"><label>Bol u kolenu (0–10)</label><select data-f="knee">${opt(l.knee,0,10)}</select></div>
+    <div class="f-field"><label>Telesna masa (kg)</label><input type="text" inputmode="decimal" data-f="kg" value="${l.kg!=null?String(l.kg).replace('.',','):''}" placeholder="npr. 80,5"></div>
+    <div class="f-field"><label>Datum</label><input type="date" data-f="ts" value="${l.ts||d.date}"></div>`;
+  if(d.session){
+    f+=`<div class="f-field full" style="border:1px solid rgba(0,213,250,.3)"><label style="color:var(--cyan)">Tempo radnog dela (bez WU/CD) — opciono</label><input type="text" inputmode="numeric" data-f="workPace" value="${l.workPaceSec?fmtP(l.workPaceSec):''}" placeholder="npr. 356 = 3:56/km"></div>
+    <div class="note-src" style="grid-column:1/-1;margin-top:0">Ovo pokreće prilagođavanje plana — unosi SAMO tempo radnog dela, ne prosek celog treninga.</div>`;
+  }
+  f+=`<div class="f-field full"><label>Beleška</label><textarea data-f="note" placeholder="Kako je bilo…">${esc(l.note||'')}</textarea></div>
+  </div>`;
+  return f;
+}
+function bindForm(root,d){
+  const g=root.querySelector(`.f-grid[data-day="${d.id}"]`);
+  if(!g)return;
+  g.querySelectorAll('[data-f]').forEach(inp=>{
+    const f=inp.dataset.f;
+    const h=()=>{
+      const l=S.log[d.id]||(S.log[d.id]={status:stFor(d.id)});
+      const v=inp.value.trim();
+      if(f==='km'||f==='kg'){const n=parseFloat(v.replace(',','.'));l[f]=(v!==''&&isFinite(n))?n:null;}
+      else if(f==='sec'){l.sec=parseTimeStr(v);}
+      else if(f==='hr'){const n=parseInt(v,10);l.hr=isFinite(n)?n:null;}
+      else if(f==='rpe'||f==='knee'){l[f]=inp.value===''?null:+inp.value;}
+      else if(f==='ts'){if(inp.value)l.ts=inp.value;}
+      else if(f==='workPace'){/* obrađeno u 'change' niže, ne ovde */ return;}
+      else{l[f]=inp.value;}
+      const t=g.querySelector('[data-tempo]');
+      if(t)t.textContent=(l.km&&l.sec)?fmtTempo(l.sec/l.km)+' /km':'—';
+      syncSide(d);save();
+    };
+    inp.addEventListener('input',h);
+    if(f!=='workPace')inp.addEventListener('change',h);
+  });
+  const wp=g.querySelector('[data-f="workPace"]');
+  if(wp)wp.addEventListener('change',()=>{
+    const l=S.log[d.id]||(S.log[d.id]={status:stFor(d.id)});
+    const sec=parseTimeStr(wp.value.trim());
+    l.workPaceSec=sec;
+    save();
+    if(sec){
+      const preview=computeRecalPreview(d, sec);
+      if(preview)openRecalSheet(d, sec, preview);
+    }
+  });
+}
+function syncSide(d){
+  const l=S.log[d.id];if(!l)return;
+  const kid='kt-'+d.id;
+  S.knee=S.knee.filter(k=>k.id!==kid);
+  if(l.knee!=null)S.knee.push({id:kid,src:d.id,date:l.ts||d.date,act:d.km!=null?'Trčanje':'Snaga',pain:l.knee,note:l.note||''});
+  S.kg=S.kg.filter(x=>x.src!==d.id);
+  if(l.kg!=null)S.kg.push({date:l.ts||d.date,kg:l.kg,src:d.id});
+  S.knee.sort((a,b)=>a.date<b.date?-1:1);
+  S.kg.sort((a,b)=>a.date<b.date?-1:1);
+}
+function donePop(){
+  const w=document.createElement('div');
+  w.className='done-pop';
+  w.innerHTML=`<svg viewBox="0 0 100 100" class="fade-out"><circle cx="50" cy="50" r="46"/><path d="M30 52 L45 66 L72 37"/></svg>`;
+  document.body.appendChild(w);
+  setTimeout(()=>w.remove(),1500);
+}
+
+/* ---------- REKALIBRACIJA — sheet potvrde ---------- */
+function openRecalSheet(day, workPaceSec, preview){
+  const oldPace = day.session.paceSec;
+  const wIdx = preview.wIdx;
+  const nextQ = preview.recal.weeks.flatMap(w=>w.days).find(dd=>dd.session && dd.session.kind===day.session.kind);
+  const cmp = nextQ ? `<div class="rsub" style="margin-top:10px">Sledeća „${esc(nextQ.session.kind)}" sesija: <b>${fmtP(oldPace)}/km → ${fmtP(nextQ.session.paceSec)}/km</b></div>` : '';
+  openSheet(`
+    <div class="sh-t">Forma izmerena</div>
+    <div class="sh-s">Radni tempo ${fmtP(workPaceSec)}/km vs. plan ${fmtP(oldPace)}/km</div>
+    <div class="card" style="margin:0 0 14px">
+      <div class="card-t">VDOT</div>
+      <div class="big" style="font-size:2rem">${(S.vdotSmoothed||S.meta._vdotAtGen).toFixed(1)} → ${preview.vdotNew.toFixed(1)}</div>
+      <div class="rsub" style="font-size:.8rem;color:var(--txt2);margin-top:4px">Izmereno na ovoj sesiji: ${preview.vdotObs.toFixed(1)} · pomak prigušen (${Math.round(preview.alpha*100)}%) jer je jedna sesija šum, ne dokaz.</div>
+      ${cmp}
+    </div>
+    <div class="note-src" style="margin-bottom:14px">Menja se SAMO od tekuće nedelje (N${wIdx}) nadalje. Odrađeni treninzi i ručne izmene su netaknuti.</div>
+    <div class="btnrow" style="margin-top:0">
+      <button class="btn ghost" id="recal-no">Odbaci</button>
+      <button class="btn" id="recal-yes">Prihvati</button>
+    </div>
+  `);
+  $('#recal-yes').onclick=()=>{ applyRecal(preview.recal, preview.vdotNew, wIdx); closeSheet(); donePop(); };
+  $('#recal-no').onclick=()=>{ closeSheet(); };
+}
+
+/*==DOM==*/
+
+/* ---------- PLAN ---------- */
+function renderPlan(){
+  const el=$('#pg-plan');
+  if(!S.plan){el.innerHTML=`<div class="empty">Plan nije generisan.</div>`;return;}
+  if(!openW.size){const w=weekOf(TODAY);openW.add(w?w.w:1);}
+  let h='';
+  S.plan.weeks.forEach(w=>{
+    const pk=weekPlanKm(w),rk=weekRealKm(w),dn=weekDone(w),ct=weekCountable(w);
+    const cur=weekOf(TODAY)===w;
+    const dowTag = w.deload?`<span class="wk-tag">DELOAD</span>`:(w.w===S.plan.weeks.length?`<span class="wk-tag" style="background:rgba(250,46,85,.15);color:var(--pink)">TRKA</span>`:'');
+    h+=`<div class="wk${openW.has(w.w)?' open':''}" data-w="${w.w}">
+      <button class="wk-h">
+        <div class="wk-n" style="${cur?'color:var(--pink)':''}">N${w.w}</div>
+        <div class="wk-i"><div class="wk-d">${cur?'tekuća nedelja':ct+' treninga'}</div><div class="wk-f">${ct} treninga${dowTag}</div></div>
+        <div class="wk-km"><b>${fmtKm(rk)} / ${fmtKm(pk)} km</b>${dn}/${ct} tren.</div>
+      </button>
+      <div class="wk-bar"><i style="width:${ct?Math.round(dn/ct*100):0}%"></i></div>
+      <div class="wk-body">`;
+    w.days.forEach(d=>{
+      const s=d.rest?null:stFor(d.id);
+      const title=d.rest?'Odmor':d.desc.split('\n')[0];
+      h+=`<div class="day">
+        <button class="day-row" data-d="${d.id}" style="width:100%">
+          <div class="day-d">${DOW[d.dow-1]}<small>${d.date?fmtD(d.date):''}</small></div>
+          <div class="day-t" style="${d.rest?'color:var(--txt3)':''}">${esc(title)}</div>
+          <div class="day-km">${d.km!=null?fmtKm(d.km):''}</div>
+          ${d.rest?'<span class="st rest">—</span>':`<span class="st ${s}">${s==='done'?'✓':s==='skip'?'⏭':'○'}</span>`}
+        </button>
+        ${d.session?editGrid(w.w,d):''}
+      </div>`;
+    });
+    h+=`</div></div>`;
+  });
+  el.innerHTML=h;
+  el.querySelectorAll('.wk-h').forEach(b=>b.onclick=()=>{
+    const w=+b.closest('.wk').dataset.w;
+    openW.has(w)?openW.delete(w):openW.add(w);
+    b.closest('.wk').classList.toggle('open');
+  });
+  el.querySelectorAll('.day-row[data-d]').forEach(b=>b.onclick=()=>openDaySheet(b.dataset.d));
+  bindEditGrids(el);
+}
+function editGrid(wNum,d){
+  const S_=d.session, gid=`data-w="${wNum}" data-id="${d.id}"`;
+  const ef=(lbl,f,val,typ)=>`<div class="ef"><label>${lbl}</label><input type="${typ||'number'}" data-f="${f}" value="${val}"></div>`;
+  if(S_.type==='int')
+    return `<div class="ef-grid" ${gid}>${ef('Tempo','paceSec',fmtP(S_.paceSec),'text')}${ef('Broj','reps',S_.reps)}${ef('Dužina m','repM',S_.repM)}${ef(S_.kind==='Tempo (broken)'?'Float s':'Pauza s','restSec',S_.restSec)}</div>`;
+  if(S_.type==='fartlek')
+    return `<div class="ef-grid" ${gid}>${ef('Tempo','paceSec',fmtP(S_.paceSec),'text')}${ef('Broj','reps',S_.reps)}${ef('Trajanje s','repSec',S_.repSec)}${ef('Džog s','restSec',S_.restSec)}</div>`;
+  if(S_.type==='prog')
+    return `<div class="ef-grid tempo2" ${gid}>${ef('Završni tempo','paceSec',fmtP(S_.paceSec),'text')}<div class="ef"><label>Km ukupno</label><input type="number" step="0.1" data-f="qKm" value="${S_.qKm}"></div></div>`;
+  return `<div class="ef-grid tempo2" ${gid}>${ef('Tempo','paceSec',fmtP(S_.paceSec),'text')}<div class="ef"><label>Km</label><input type="number" step="0.1" data-f="qKm" value="${S_.qKm}"></div></div>`;
+}
+function bindEditGrids(root){
+  root.querySelectorAll('.ef-grid input').forEach(inp=>{
+    inp.addEventListener('change',()=>{
+      const grid=inp.closest('.ef-grid');
+      const day=BY_ID[grid.dataset.id];
+      const field=inp.dataset.f;
+      let val;
+      if(field==='paceSec'){ val=parseTimeStr(inp.value); if(val==null){ inp.value=fmtP(day.session.paceSec); return; } }
+      else{ val=+inp.value; if(!isFinite(val)||val<=0){ inp.value=day.session[field]; return; } }
+      applyEdit(day, field, val);
+      inp.closest('.ef').classList.add('touched');
+      const dayEl=grid.closest('.day');
+      dayEl.querySelector('.day-t').textContent=day.desc.split('\n')[0];
+      const kmEl=dayEl.querySelector('.day-km'); if(kmEl) kmEl.textContent=fmtKm(day.km);
+      if(field==='paceSec') inp.value=fmtP(day.session.paceSec);
+      const wk=weekByNum(day.weekNum);
+      wk.vol = Math.round(wk.days.reduce((s,x)=>s+(x.km||0),0)*10)/10;
+      const wkEl=grid.closest('.wk');
+      wkEl.querySelector('.wk-km b').textContent=fmtKm(weekRealKm(wk))+' / '+fmtKm(wk.vol)+' km';
+      save();
+    });
+  });
+}
+function openDaySheet(id){
+  const d=BY_ID[id],s=stFor(id);
+  openSheet(`
+    <div class="sh-t">N${d.weekNum} · ${DOW[d.dow-1]} ${fmtDY(d.date)}</div>
+    <div class="sh-s">${sessionKind(d)}${d.km!=null?' · plan '+fmtKm(d.km)+' km':''}</div>
+    <div class="desc" style="font-size:.85rem">${esc(d.desc)}</div>
+    <div class="seg" id="seg">
+      <button data-s="pending" class="${s==='pending'?'on':''}">Predstoji</button>
+      <button data-s="done" class="c-done ${s==='done'?'on':''}">Odrađen</button>
+      <button data-s="skip" class="c-skip ${s==='skip'?'on':''}">Preskočen</button>
+    </div>
+    ${formHTML(d)}
+    ${S.log[id]?`<div class="btnrow"><button class="btn danger" id="del-log">Obriši unos</button></div>`:''}
+    <div class="note-src">Sve izmene se čuvaju automatski.</div>
+  `);
+  const sh=$('#sheet');
+  bindForm(sh,d);
+  sh.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{
+    const l=S.log[id]||(S.log[id]={});
+    l.status=b.dataset.s;
+    if(b.dataset.s==='done'&&!l.ts)l.ts=d.date;
+    save();
+    sh.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on',x===b));
+    if(b.dataset.s==='done')donePop();
+  });
+  const del=sh.querySelector('#del-log');
+  if(del)del.onclick=()=>{
+    if(!confirm('Obriši sve unete podatke za ovaj trening?'))return;
+    delete S.log[id];
+    S.knee=S.knee.filter(k=>k.src!==id);
+    S.kg=S.kg.filter(k=>k.src!==id);
+    save();closeSheet();
+  };
+}
+
+/* ---------- PROGRES ---------- */
+function svgW(w,h,inner){return `<svg class="chart" viewBox="0 0 ${w} ${h}">${inner}</svg>`;}
+function renderProg(){
+  const el=$('#pg-prog');
+  if(!S.plan){el.innerHTML=`<div class="empty">Plan nije generisan.</div>`;return;}
+  const w=weekOf(TODAY)||(TODAY<S.meta.startDate?S.plan.weeks[0]:S.plan.weeks[S.plan.weeks.length-1]);
+  const pk=weekPlanKm(w),rk=weekRealKm(w),dn=weekDone(w),ct=weekCountable(w);
+  const c1=2*Math.PI*62,c2=2*Math.PI*42;
+  const f1=pk?Math.min(rk/pk,1):0,f2=ct?Math.min(dn/ct,1):0;
+  const done=totalDone(),tot=S.plan.weeks.reduce((n,wk)=>n+weekCountable(wk),0),pct=tot?done/tot*100:0;
+  el.innerHTML=`
+  <div class="card">
+    <div class="card-t">Tekuća nedelja — N${w.w}</div>
+    <div class="rings-wrap">
+      <svg class="rings" viewBox="0 0 150 150">
+        <circle class="ring-track" cx="75" cy="75" r="62" stroke="var(--pink)"/>
+        <circle class="ring-val" cx="75" cy="75" r="62" stroke="var(--pink)" stroke-dasharray="${c1}" stroke-dashoffset="${c1}" data-off="${c1*(1-f1)}"/>
+        <circle class="ring-track" cx="75" cy="75" r="42" stroke="var(--green)"/>
+        <circle class="ring-val" cx="75" cy="75" r="42" stroke="var(--green)" stroke-dasharray="${c2}" stroke-dashoffset="${c2}" data-off="${c2*(1-f2)}"/>
+      </svg>
+      <div class="rings-leg">
+        <div class="rl"><span style="color:var(--pink)">KILOMETRAŽA</span><b>${fmtKm(rk)} / ${fmtKm(pk)} km</b></div>
+        <div class="rl"><span style="color:var(--green)">TRENINZI</span><b>${dn} / ${ct}</b></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-t">Ispunjenost plana</div>
+    <div class="big" style="font-size:2.4rem">${fmtNum(pct,1)}%</div>
+    <div class="big-sub">${done} / ${tot} treninga</div>
+    <div class="wk-bar" style="border-radius:3px;margin-top:12px;height:5px"><i style="width:${pct}%"></i></div>
+  </div>
+  <div class="card"><div class="card-t">Nedeljna kilometraža — plan vs. realizovano</div>${chartWeeks()}</div>
+  <div class="card"><div class="card-t">Telesna masa${S.weightTarget?' — cilj vs. stvarno':''}</div>${chartWeight()}</div>
+  <div class="card"><div class="card-t">Prosečan tempo — odrađena trčanja</div>${chartTempo()}</div>`;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    el.querySelectorAll('.ring-val').forEach(r=>r.style.strokeDashoffset=r.dataset.off);
+  }));
+}
+function chartWeeks(){
+  const W=340,H=152,L=26,B=130,T=8;
+  const weeks=S.plan.weeks;
+  const max=Math.max(...weeks.map(w=>w.vol),10)*1.1;
+  const gw=(W-L-6)/weeks.length;
+  let g='';
+  const step=Math.ceil(max/4/5)*5||5;
+  for(let v=0;v<=max;v+=step){const y=B-(v/max)*(B-T);g+=`<line class="gl" x1="${L}" y1="${y}" x2="${W-2}" y2="${y}"/><text class="ax" x="${L-4}" y="${y+3}" text-anchor="end">${v}</text>`;}
+  weeks.forEach((w,i)=>{
+    const x=L+i*gw+2.5;
+    const ph=(w.vol/max)*(B-T),rh=(weekRealKm(w)/max)*(B-T);
+    g+=`<rect x="${x}" y="${B-ph}" width="${gw/2-1.5}" height="${Math.max(ph,1)}" rx="2" fill="rgba(255,255,255,.16)"/>`;
+    if(rh>0)g+=`<rect x="${x+gw/2-0.5}" y="${B-rh}" width="${gw/2-1.5}" height="${Math.max(rh,1)}" rx="2" fill="var(--pink)"/>`;
+    if(weeks.length<=16)g+=`<text class="ax" x="${x+gw/2-1.5}" y="${B+12}" text-anchor="middle">${w.w}</text>`;
+  });
+  return svgW(W,H,g);
+}
+function chartWeight(){
+  const W=340,H=152,L=30,R=8,B=128,T=10;
+  const act=S.kg.slice().sort((a,b)=>a.date<b.date?-1:1);
+  const wt=S.weightTarget;
+  const allKg=act.map(a=>a.kg).concat(wt?[wt.startKg,wt.goalKg]:[]);
+  if(!allKg.length)return `<div class="empty">Nema unosa težine.</div>`;
+  const min=Math.floor(Math.min(...allKg)-1), max=Math.ceil(Math.max(...allKg)+1);
+  const totalW=S.plan.weeks.length;
+  const X=i=>L+(i-1)/(Math.max(totalW-1,1))*(W-L-R);
+  const Y=v=>B-(Math.max(min,Math.min(max,v))-min)/(max-min)*(B-T);
+  let g='';
+  const step=Math.max(1,Math.round((max-min)/4));
+  for(let v=min;v<=max;v+=step){g+=`<line class="gl" x1="${L}" y1="${Y(v)}" x2="${W-R}" y2="${Y(v)}"/><text class="ax" x="${L-4}" y="${Y(v)+3}" text-anchor="end">${v}</text>`;}
+  if(wt){
+    g+=`<polyline fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.5" stroke-dasharray="4 4" points="${X(1)},${Y(wt.startKg)} ${X(totalW)},${Y(wt.goalKg)}"/>`;
+    g+=`<text class="ax" x="${W-R}" y="${T+2}" text-anchor="end">isprekidano = tvoj cilj</text>`;
+  }
+  if(act.length){
+    const pts=act.map(a=>({x:X(1+diffD(S.meta.startDate,a.date)/7),y:Y(a.kg)}));
+    if(pts.length>1)g+=`<polyline fill="none" stroke="var(--pink)" stroke-width="2" points="${pts.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')}"/>`;
+    pts.forEach(p=>g+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.4" fill="var(--pink)"/>`);
+  }
+  return svgW(W,H,g);
+}
+function chartTempo(){
+  const runs=[];
+  S.plan.weeks.forEach(w=>w.days.forEach(d=>{
+    const l=S.log[d.id];
+    if(l&&l.status==='done'&&l.km>0&&l.sec>0)runs.push({date:l.ts||d.date||'',t:l.sec/l.km});
+  }));
+  runs.sort((a,b)=>a.date<b.date?-1:1);
+  if(!runs.length)return `<div class="empty">Unesi distancu i vreme na treninzima — trend se crta automatski.</div>`;
+  const W=340,H=152,L=38,R=10,B=128,T=12;
+  let lo=Math.min(...runs.map(r=>r.t))-15,hi=Math.max(...runs.map(r=>r.t))+15;
+  if(hi-lo<50){const m=(hi+lo)/2;lo=m-25;hi=m+25;}
+  const X=i=>runs.length>1?L+i/(runs.length-1)*(W-L-R):L+(W-L-R)/2;
+  const Y=v=>T+(v-lo)/(hi-lo)*(B-T);
+  let g='';
+  [lo+(hi-lo)*.12,(lo+hi)/2,hi-(hi-lo)*.12].forEach(v=>{g+=`<line class="gl" x1="${L}" y1="${Y(v).toFixed(1)}" x2="${W-R}" y2="${Y(v).toFixed(1)}"/><text class="ax" x="${L-4}" y="${(Y(v)+3).toFixed(1)}" text-anchor="end">${fmtTempo(v)}</text>`;});
+  if(runs.length>1)g+=`<polyline fill="none" stroke="var(--cyan)" stroke-width="2" points="${runs.map((r,i)=>X(i).toFixed(1)+','+Y(r.t).toFixed(1)).join(' ')}"/>`;
+  runs.forEach((r,i)=>g+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(r.t).toFixed(1)}" r="3.4" fill="var(--cyan)"/>`);
+  g+=`<text class="ax" x="${W-R}" y="${B+12}" text-anchor="end">gore = brže</text>`;
+  return svgW(W,H,g);
+}
+
+/* ---------- KOLENO (v3: bez pragova/preporuka — samo grafikon + log) ---------- */
+function renderKnee(){
+  const el=$('#pg-koleno');
+  const list=S.knee.slice().sort((a,b)=>a.date<b.date?1:-1);
+  let h=`<div class="card"><div class="card-t">Bol (0–10) kroz vreme</div>${chartKnee()}</div>`;
+  h+=`<div class="btnrow" style="margin:0 0 14px"><button class="btn ghost" id="k-add">+ Dodaj unos</button></div>`;
+  h+=`<div class="card">`+(list.length?list.map(k=>`
+    <button class="krow" data-k="${k.id}">
+      <div class="kp ${k.pain>=6?'p2':k.pain>=1?'p1':'p0'}">${k.pain}</div>
+      <div class="ki"><div class="kd">${DOW[(s2d(k.date).getDay()+6)%7]} ${fmtD(k.date)} <span style="color:var(--txt3)">· ${esc(k.act)}${k.src?' · iz treninga':''}</span></div>${k.note?`<div class="kn">${esc(k.note)}</div>`:''}</div>
+    </button>`).join(''):`<div class="empty">Nema unosa.</div>`)+`</div>`;
+  el.innerHTML=h;
+  $('#k-add').onclick=()=>openKneeSheet(null);
+  el.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>openKneeSheet(b.dataset.k));
+}
+function chartKnee(){
+  const es=S.knee.slice().sort((a,b)=>a.date<b.date?-1:1);
+  if(!es.length)return `<div class="empty">Nema unosa.</div>`;
+  const W=340,H=144,L=22,R=8,B=120,T=10;
+  const d0=es[0].date,d1=es[es.length-1].date>TODAY?es[es.length-1].date:TODAY;
+  const span=Math.max(diffD(d0,d1),1);
+  const X=d=>L+diffD(d0,d)/span*(W-L-R);
+  const Y=v=>B-(v/10)*(B-T);
+  let g='';
+  [0,5,10].forEach(v=>{g+=`<line class="gl" x1="${L}" y1="${Y(v)}" x2="${W-R}" y2="${Y(v)}"/><text class="ax" x="${L-4}" y="${Y(v)+3}" text-anchor="end">${v}</text>`;});
+  if(es.length>1)g+=`<polyline fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.5" points="${es.map(e=>X(e.date).toFixed(1)+','+Y(e.pain).toFixed(1)).join(' ')}"/>`;
+  es.forEach(e=>g+=`<circle cx="${X(e.date).toFixed(1)}" cy="${Y(e.pain).toFixed(1)}" r="3.6" fill="${e.pain>=6?'var(--red)':e.pain>=1?'var(--amber)':'var(--green)'}"/>`);
+  g+=`<text class="ax" x="${L}" y="${B+12}">${fmtD(d0)}</text><text class="ax" x="${W-R}" y="${B+12}" text-anchor="end">${fmtD(d1)}</text>`;
+  return svgW(W,H,g);
+}
+function openKneeSheet(id){
+  const k=id?S.knee.find(x=>x.id===id):{date:TODAY,act:'Trčanje',pain:0,note:''};
+  if(id&&!k)return;
+  const acts=['Trčanje','Snaga','Odmor','Drugo'];
+  openSheet(`
+    <div class="sh-t">${id?'Unos — koleno':'Novi unos — koleno'}</div>
+    <div class="sh-s">${k.src?'Vezan za trening — izmena treninga ažurira ovaj unos':'Ručni unos'}</div>
+    <div class="f-grid">
+      <div class="f-field"><label>Datum</label><input type="date" id="kf-date" value="${k.date}"></div>
+      <div class="f-field"><label>Aktivnost</label><select id="kf-act">${acts.map(a=>`<option${a===k.act?' selected':''}>${a}</option>`).join('')}</select></div>
+      <div class="f-field full"><label>Bol (0–10) <span style="float:right;font-weight:800" id="kf-pv">${k.pain}</span></label><input type="range" id="kf-pain" min="0" max="10" step="1" value="${k.pain}"></div>
+      <div class="f-field full"><label>Beleška</label><textarea id="kf-note" placeholder="Gde, kada, kako…">${esc(k.note)}</textarea></div>
+    </div>
+    <div class="btnrow">${id?`<button class="btn danger" id="kf-del">Obriši unos</button>`:`<button class="btn" id="kf-save">Dodaj</button>`}</div>
+  `);
+  const sh=$('#sheet');
+  sh.querySelector('#kf-pain').oninput=e=>{
+    sh.querySelector('#kf-pv').textContent=e.target.value;
+    k.pain=+e.target.value;
+    if(id)save();
+  };
+  if(id){
+    sh.querySelector('#kf-date').onchange=e=>{if(e.target.value){k.date=e.target.value;S.knee.sort((a,b)=>a.date<b.date?-1:1);save();}};
+    sh.querySelector('#kf-act').onchange=e=>{k.act=e.target.value;save();};
+    sh.querySelector('#kf-note').oninput=e=>{k.note=e.target.value;save();};
+    sh.querySelector('#kf-del').onclick=()=>{
+      if(!confirm('Obriši ovaj unos?'))return;
+      S.knee=S.knee.filter(x=>x.id!==id);save();closeSheet();
+    };
+  }else{
+    sh.querySelector('#kf-save').onclick=()=>{
+      S.knee.push({id:'k'+Date.now(),src:null,date:sh.querySelector('#kf-date').value||TODAY,act:sh.querySelector('#kf-act').value,pain:k.pain,note:sh.querySelector('#kf-note').value.trim()});
+      S.knee.sort((a,b)=>a.date<b.date?-1:1);
+      save();closeSheet();
+    };
+  }
+}
+
+/*==DOM==*/
+
+/* ---------- PREDIKCIJA (redovi generisani iz plana, ne konstanta) ---------- */
+function renderPred(){
+  const el=$('#pg-pred');
+  if(!S.plan){el.innerHTML=`<div class="empty">Plan nije generisan.</div>`;return;}
+  const rows=S.plan.pred.map(r=>{const a=S.pred[r.w+'-'+r.l];return{r,a,pred:a?riegelV2(a,r.q):null};});
+  const entered=rows.filter(x=>x.pred!=null);
+  const last=entered.length?entered[entered.length-1]:null;
+  const best=entered.length?entered.reduce((m,x)=>x.pred<m.pred?x:m):null;
+  const goal = S.meta.goalSec;
+  const stat=x=>x?fmtClock(x.pred):'—';
+  const col=x=>x&&goal&&x.pred<goal?'var(--green)':'var(--txt)';
+  let h=`<div class="pstat">
+    <div class="card"><div class="big" style="font-size:1.9rem;color:${col(last)}">${stat(last)}</div><div class="big-sub">ZADNJA predikcija</div></div>
+    <div class="card"><div class="big" style="font-size:1.9rem;color:${col(best)}">${stat(best)}</div><div class="big-sub">NAJBRŽA predikcija</div></div>
+  </div>`;
+  h+=`<div class="card"><div class="card-t">Kvalitetne sesije — unesi ostvaren tempo</div>`;
+  rows.forEach(({r,a,pred})=>{
+    const key=r.w+'-'+r.l;
+    h+=`<div class="prow">
+      <div class="pi"><div class="pl">N${r.w} · ${esc(r.l)}</div><div class="pm">Q ${fmtKm(r.q)} km · plan ${fmtTempo(r.pt)} /km · plan 5K ${fmtClock(r.p5k)}</div></div>
+      <input class="ptin" inputmode="numeric" placeholder="356 = 3:56" value="${a?fmtTempo(a):''}" data-pin="${key}">
+      <div class="pout" data-pout="${key}">${poutHTML(r,pred)}</div>
+    </div>`;
+  });
+  h+=`</div>
+  <div class="card" style="font-size:.85rem;color:var(--txt2);line-height:1.5">${goal?`🎯 Cilj: ${fmtClock(goal)}. `:''}Kad NAJBRŽA predikcija stabilno padne ispod cilja, matematički si spreman.<br><span style="color:var(--txt3);font-size:.75rem">Riegel: T₂ = T₁ × (5 / Q-km)^1.06 · unosi se prosečan tempo kvalitetnog segmenta (m:ss po km)</span></div>`;
+  el.innerHTML=h;
+  el.querySelectorAll('[data-pin]').forEach(inp=>{
+    inp.addEventListener('input',()=>{
+      const key=inp.dataset.pin;
+      const v=parseTimeStr(inp.value);
+      if(inp.value.trim()==='')delete S.pred[key];
+      else if(v)S.pred[key]=v;
+      else return;
+      save();
+      const r=S.plan.pred.find(x=>(x.w+'-'+x.l)===key);
+      const pred=S.pred[key]?riegelV2(S.pred[key],r.q):null;
+      el.querySelector(`[data-pout="${key}"]`).innerHTML=poutHTML(r,pred);
+      renderPredHeader(el);
+    });
+  });
+}
+function renderPredHeader(el){
+  const rows=S.plan.pred.map(r=>{const a=S.pred[r.w+'-'+r.l];return{r,a,pred:a?riegelV2(a,r.q):null};});
+  const entered=rows.filter(x=>x.pred!=null);
+  const last=entered.length?entered[entered.length-1]:null;
+  const best=entered.length?entered.reduce((m,x)=>x.pred<m.pred?x:m):null;
+  const goal=S.meta.goalSec;
+  const col=x=>x&&goal&&x.pred<goal?'var(--green)':'var(--txt)';
+  const bigs=el.querySelectorAll('.pstat .big');
+  bigs[0].textContent=last?fmtClock(last.pred):'—'; bigs[0].style.color=col(last);
+  bigs[1].textContent=best?fmtClock(best.pred):'—'; bigs[1].style.color=col(best);
+}
+function poutHTML(r,pred){
+  if(pred==null)return `<b style="color:var(--txt3)">—</b>`;
+  const dz=r.p5k-pred;
+  return `<b>${fmtClock(pred)}</b><span class="${dz>=0?'pos':'neg'}">${dz>=0?'+':'−'}${fmtNum(Math.abs(dz),1)} s vs plan</span>`;
+}
+
+/* ---------- PODEŠAVANJA ---------- */
+function openSettings(){
+  const wt=S.weightTarget||{startKg:'',goalKg:''};
+  openSheet(`
+    <div class="sh-t">Podešavanja i podaci</div>
+    <div class="sh-s">${Object.keys(S.log).length} trening-unosa · ${S.knee.length} koleno · ${S.kg.length} težina</div>
+    ${LS_OK?'':`<div class="kb warn"><div><div>Skladište nedostupno</div><small>Podaci žive samo dok je stranica otvorena.</small></div></div>`}
+    <div class="card-t" style="margin-top:4px">Cilj telesne mase — opciono</div>
+    <div class="f-grid">
+      <div class="f-field"><label>Početna (kg)</label><input type="text" inputmode="decimal" id="wt-start" value="${wt.startKg||''}" placeholder="npr. 82"></div>
+      <div class="f-field"><label>Ciljna (kg)</label><input type="text" inputmode="decimal" id="wt-goal" value="${wt.goalKg||''}" placeholder="npr. 75,5"></div>
+    </div>
+    <div class="note-src" style="margin-bottom:14px">Prazno = grafikon bez ciljne linije, samo stvarni unosi.</div>
+    <hr class="sep">
+    <div class="btnrow" style="margin-top:2px"><button class="btn" id="s-exp">Izvezi backup (JSON)</button></div>
+    <div class="btnrow"><button class="btn ghost" id="s-imp">Uvezi backup</button></div>
+    <input type="file" id="s-file" accept=".json,application/json" style="display:none">
+    <hr class="sep">
+    <div class="note-src">Poslednji backup: ${S.ui.lastBackup?fmtDY(S.ui.lastBackup):'nikad'} · Šema: v${S.v} · Plan: ${TOTAL_TR} treninga / ${fmtKm(totalPlanKm())} km · Trka: ${fmtDY(S.meta.raceDate)}</div>
+  `);
+  $('#wt-start').addEventListener('change',e=>{
+    const n=parseFloat(e.target.value.replace(',','.'));
+    const g=$('#wt-goal').value.trim();
+    if(isFinite(n)&&g!==''){S.weightTarget={startKg:n,goalKg:parseFloat(g.replace(',','.'))};}
+    else if(!isFinite(n)&&g===''){S.weightTarget=null;}
+    save();
+  });
+  $('#wt-goal').addEventListener('change',e=>{
+    const n=parseFloat(e.target.value.replace(',','.'));
+    const s=$('#wt-start').value.trim();
+    if(isFinite(n)&&s!==''){S.weightTarget={startKg:parseFloat(s.replace(',','.')),goalKg:n};}
+    else if(!isFinite(n)&&s===''){S.weightTarget=null;}
+    save();
+  });
+  $('#s-exp').onclick=exportBackup;
+  $('#s-imp').onclick=()=>$('#s-file').click();
+  $('#s-file').onchange=e=>importBackup(e.target.files[0]);
+}
+function exportBackup(){
+  const data={app:'sub19v3',exportedAt:new Date().toISOString(),state:S};
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='trkacki-plan-backup-'+TODAY+'.json';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  S.ui.lastBackup=TODAY;S.ui.snooze=null;save();
+  if(ACTIVE==='danas')renderDanas();
+}
+function importBackup(file){
+  if(!file)return;
+  const fr=new FileReader();
+  fr.onload=()=>{
+    try{
+      const raw=JSON.parse(fr.result);
+      const st=migrate(raw.state||raw);
+      if(!st){alert('Fajl nije prepoznat kao backup ove aplikacije.');return;}
+      if(!confirm(`Uvoz će PREPISATI postojeće podatke.\n\nU fajlu: ${Object.keys(st.log).length} trening-unosa, ${st.knee.length} koleno, ${st.kg.length} težina.\n\nNastaviti?`))return;
+      S=st;save();indexPlan();closeSheet();
+      if(!S.plan){location.reload();}
+    }catch(e){alert('Greška pri čitanju fajla: '+e.message);}
+  };
+  fr.readAsText(file);
+}
+
+/* ---------- INIT ---------- */
+$('#btn-gear').addEventListener('click',openSettings);
+$('#backdrop').addEventListener('click',closeSheet);
+$$('nav button').forEach(b=>b.addEventListener('click',()=>setPage(b.dataset.pg)));
+
+if(S.plan){
+  indexPlan();
+  $('#onboard').style.display='none';
+  $('#appHeader').style.display='';$('#appMain').style.display='';$('#tabbar').style.display='';
+  renderHeader(); setPage('danas');
+}else{
+  renderOnboard();
+}
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
