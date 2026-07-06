@@ -149,14 +149,33 @@ function fmtP(sec){const m=Math.floor(sec/60),s=sec%60;return m+':'+String(s).pa
 function riegel(sec, fromM, toM){ return sec*Math.pow(toM/fromM,1.06); }
 
 /* ---------- realnost cilja ---------- */
-function assess(pb, weeks, intensity, goalSec){
+/* ============================================================
+   PODRŽANE CILJNE DISTANCE. Ultra NIJE uključen — namerno.
+   Daniels sam tretira ultra treninge kao posebno poglavlje,
+   eksplicitno IZUZETO iz 150-min LR pravila ("unless preparing
+   for ultraevents"). Matematički: pctVo2max(t) teži ka 80% kako
+   t→∞ (asimptota u formuli) — za napore od 6-30+ sati to nije
+   validirano niti verovatno tačno (realni održivi %VO2max pada
+   mnogo niže zbog glikogena/termoregulacije/GI, što formula
+   kalibrisana na rezultate do maratona ne modeluje).
+   minWeeks je inženjerska bezbednosna granica (Daniels-ovi
+   maratonski planovi u praksi traju 18+ nedelja), NE fiziološki
+   zakon — plan ispod ovoga fizički radi, samo je rizičniji. */
+const DIST_PROFILES = {
+  5000:    { name:'5K',          minWeeks:6,  useM:false, qMix:'speed' },
+  10000:   { name:'10K',         minWeeks:8,  useM:false, qMix:'speed' },
+  21097.5: { name:'Polumaraton', minWeeks:10, useM:false, qMix:'threshold' },
+  42195:   { name:'Maraton',     minWeeks:12, useM:true,  qMix:'marathon' }
+};
+function assess(pb, weeks, intensity, goalSec, raceDistM){
+  raceDistM = raceDistM||5000;
   const vdot0 = vdotFromRace(pb.distM, pb.sec);
   const rampW = Math.max(weeks-2, 1);              /* rast staje pred taper */
   const vdotGoal = vdot0 + RAMP[intensity]*rampW;
-  const predictedSec = raceTimeForVdot(vdotGoal, 5000);
+  const predictedSec = raceTimeForVdot(vdotGoal, raceDistM);
   const out = { vdot0:r1(vdot0), vdotGoal:r1(vdotGoal), predictedSec, realno:null, goalVdot:null };
   if(goalSec){
-    const gv = vdotFromRace(5000, goalSec);
+    const gv = vdotFromRace(raceDistM, goalSec);
     out.goalVdot = r1(gv);
     out.realno = gv <= vdotGoal + 0.3;             /* tolerancija zaokruživanja */
   }
@@ -176,27 +195,48 @@ function pickReps(workKm, wkIdx, weeks){
    RASPODELA VOLUMENA — LR INVARIJANTA
    Fiksno 24%-pravilo (etalon) je UKLONJENO na zahtev vlasnika plana.
    Zamena: (1) LR je NAJDUŽE trčanje nedelje — tvrda invarijanta, jača
-   od svih ostalih ograničenja; (2) gornja granica LR-a za ≥5 dana
-   trčanja ≈ Danielsova smernica (LR ≤ 30% nedeljnog obima za nedelje
-   <64 km; 'Daniels Running Formula'); capovi za 2–4 dana su inženjerski
-   (na 2 dana trčanja LR matematički MORA biti >50% nedelje).
-   Izuzetak invarijante: SAMO trkačka nedelja (trka 5 km je najkraća). */
-function allocEasyLR(vol, qKms, easyCount, runDays){
+   od svih ostalih ograničenja; (2) gornja granica LR-a kombinuje DVA
+   nezavisna Danielsova pravila, potvrđena pretragom pre implementacije:
+     (a) broj-dana-strukturni cap (≥5 dana ≈32%, niže za manje dana —
+         inženjerski, jer na 2-3 dana LR matematički MORA biti >50%)
+     (b) Danielsov volumen-cap: <64 km/ned → 30% nedelje; ≥64 km/ned →
+         min(25% nedelje, 150 minuta) — VAŽI ČAK I ZA MARATON, Daniels
+         eksplicitno: "longest steady run... 150 minutes, even if
+         preparing for a marathon" (izuzetak je SAMO ultra, van dometa).
+   Konačan LR = najmanji od (a) i (b), ali nikad ispod invarijante.
+   Izuzetak invarijante: SAMO trkačka nedelja (trka je najkraća sesija). */
+function danielsLRCapKm(vol, pLRsecPerKm){
+  if(vol<64) return vol*0.30;
+  const pctCap = vol*0.25;
+  const timeCapKm = pLRsecPerKm>0 ? (150*60)/pLRsecPerKm : Infinity;
+  return Math.min(pctCap, timeCapKm);
+}
+function allocEasyLR(vol, qKms, easyCount, runDays, pLRsecPerKm){
   const qSum=qKms.reduce((a,b)=>a+b,0);
   const maxQ=qKms.length?Math.max(...qKms):0;
   let rem=Math.max(vol-qSum, 3);
-  if(easyCount===0) return { lr:r1(Math.max(rem, maxQ*1.1)), easies:[] };
+  const danCap=danielsLRCapKm(vol, pLRsecPerKm||0);
+  if(easyCount===0) return { lr:r1(Math.min(Math.max(rem, maxQ*1.1), Math.max(danCap,maxQ*1.05))), easies:[] };
   const capF = runDays>=5?0.32: runDays===4?0.36: runDays===3?0.50:0.68;
+  const cap = Math.min(vol*capF, danCap);
+  const floor = Math.max(maxQ*1.05, 4);           /* invarijanta: LR mora biti > najveće kvalitetne sesije */
   let lr = Math.max(rem*0.45, maxQ*1.12, (rem/(easyCount+1))*1.3);
-  lr = Math.min(lr, vol*capF, rem-3*easyCount);
-  if(lr < maxQ*1.05) lr = Math.min(maxQ*1.12, rem-2.5*easyCount); /* invarijanta > cap */
-  lr = Math.max(lr, 4);
+  lr = Math.min(lr, cap, rem-3*easyCount);
+  lr = Math.max(lr, Math.min(floor, rem-2.5*easyCount)); /* invarijanta > cap KADA je moguće, ali ne beskonačno */
   const wgt=[1.15,1,0.9,0.85,0.8,0.75].slice(0,easyCount);
   const wsum=wgt.reduce((a,b)=>a+b,0);
   let easies=wgt.map(x=>Math.max(3, r1((rem-lr)*x/wsum)));
   const mx=Math.max(...easies);
-  if(mx>=lr){ const sc=(lr*0.9)/mx; easies=easies.map(e=>Math.max(3,r1(e*sc))); }
-  lr=r1(Math.max(rem - easies.reduce((a,b)=>a+b,0), Math.max(...easies, maxQ)+0.5));
+  if(mx>=lr){
+    /* Bezbednosno pravilo "lak dan < LR" mora ostati strogo, ali margina od
+       10% (0.9) je bila proizvoljno velika i nepotrebno je bacala kilometražu
+       kad ima malo lakih dana (npr. 1 na runDays=4) — otkriveno testom pri
+       uvođenju tešnjeg Daniels-capa za maraton, latentno i pre toga. Margina
+       smanjena na 3% (0.97) — i dalje strogo ispod LR, samo manje rasipanja. */
+    const sc=(lr*0.97)/mx;
+    easies=easies.map(e=>Math.max(3,r1(e*sc)));
+  }
+  lr=r1(Math.max(lr, floor));
   return { lr, easies };
 }
 
@@ -232,8 +272,19 @@ function mkProg(dow,vol,pT,pE){
   const total=r1(Math.max(5, Math.min(vol*0.20, 10)));
   return sessProg(dow,total,pT,pE);
 }
-function buildQuality(w,weeks,slotRole,effQ,vol,pI,pT,pE,isTaper1,dow,racePace){
+/* M (Marathon pace) — 75-84% VO2max (Z.M=0.80, sredina opsega), potvrđeno
+   pretragom pre implementacije. Plafon: min(110 min, 29 km) po sesiji —
+   računam ekvivalent u km preko pM (sec/km), ne fiksni broj. Koristi se
+   SAMO za qMix='marathon' — za HM/10K/5K ova zona se ne koristi (HM tempo
+   je praktično isti kao T, nema potrebe za posebnom zonom — Daniels). */
+function mkMarathonPace(dow,vol,pM){
+  const timeCapKm=(110*60)/pM;
+  const q=r1(Math.max(5, Math.min(vol*0.22, timeCapKm, 29)));
+  return sessTempo(dow,1.5,q,pM,1.5,'Maratonski tempo');
+}
+function buildQuality(w,weeks,slotRole,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,qMix,pM){
   const phase=w/weeks;
+  const fartlekEvery = qMix==='threshold' ? 4 : 3; /* HM: manje VO2max-varijeteta, više praga — Daniels: HM finalna faza = isključivo threshold */
   if(effQ===1){
     if(isTaper1) return sessInt(dow,1.5,5,400,Math.max(pI,racePace),90,1);
     const mod=w%3;
@@ -243,10 +294,16 @@ function buildQuality(w,weeks,slotRole,effQ,vol,pI,pT,pE,isTaper1,dow,racePace){
   }
   if(slotRole==='q1'){
     if(isTaper1) return sessInt(dow,1.5,5,400,Math.max(pI,racePace),90,1);
-    if(w%3===0 && phase<0.72) return mkFartlek(dow,w,pI,pE);
+    if(w%fartlekEvery===0 && phase<0.72) return mkFartlek(dow,w,pI,pE);
     return mkIntervals(dow,w,weeks,vol,pI);
   }
   /* q2 */
+  if(qMix==='marathon'){
+    if(isTaper1) return mkTempoCont(dow,vol,pT,3);
+    if(phase<0.30) return mkBroken(dow,w,vol,pT);
+    if(phase<0.55) return (w%2===1)? mkProg(dow,vol,pT,pE) : mkTempoCont(dow,vol,pT);
+    return mkMarathonPace(dow,vol,pM); /* poslednja ~45% ciklusa: M-tempo dominira — Daniels "Final Quality" faza je maraton-specifična */
+  }
   if(isTaper1) return mkTempoCont(dow,vol,pT,3);
   if(phase<0.35) return mkBroken(dow,w,vol,pT);
   if(phase<0.75) return (w%2===1)? mkProg(dow,vol,pT,pE) : mkTempoCont(dow,vol,pT);
@@ -280,14 +337,14 @@ function sessDesc(s){
     return `Fartlek — ${s.wuKm} km WU + ${s.reps}×${s.repSec} s brzo @ ~${fmtP(s.paceSec)}/km (${s.restSec} s lagani džog) + ${s.cdKm} km CD`;
   if(s.type==='prog')
     return `Progresivno — ${s.qKm} km: prve 2/3 @ ~${fmtP(s.easyPaceSec)}/km → poslednja trećina @ ${fmtP(s.paceSec)}/km`;
-  return `Tempo — ${s.wuKm} km WU + ${s.qKm} km @ ${fmtP(s.paceSec)}/km + ${s.cdKm} km CD`;
+  return `${s.kind||'Tempo'} — ${s.wuKm} km WU + ${s.qKm} km @ ${fmtP(s.paceSec)}/km + ${s.cdKm} km CD`;
 }
 function sessInt(dow,wuKm,reps,repM,paceSec,restSec,cdKm,kind){
   const session={type:'int',kind:kind||'Intervali',wuKm,reps,repM,paceSec,restSec,cdKm,overrides:{}};
   return {dow,tag:kind==='Tempo (broken)'?'tempo':'int',km:sessKm(session),desc:sessDesc(session),session};
 }
-function sessTempo(dow,wuKm,qKm,paceSec,cdKm){
-  const session={type:'tempo',kind:'Tempo',wuKm,qKm,paceSec,cdKm,overrides:{}};
+function sessTempo(dow,wuKm,qKm,paceSec,cdKm,kind){
+  const session={type:'tempo',kind:kind||'Tempo',wuKm,qKm,paceSec,cdKm,overrides:{}};
   return {dow,tag:'tempo',km:sessKm(session),desc:sessDesc(session),session};
 }
 /* Fartlek — struktura po McMillan smernici: 10–12 × 1 min surge (malo brže od 5K
@@ -314,7 +371,7 @@ function applyEdit(day, field, value){
   day.desc=sessDesc(day.session);
   return day;
 }
-function predRow(w,tip,q,pt){ return { w, l:'N'+w+' · '+tip, q, pt, p5k: Math.round(riegel(pt*q, q*1000, 5000)) }; }
+function predRow(w,tip,q,pt,raceDistM){ raceDistM=raceDistM||5000; return { w, l:'N'+w+' · '+tip, q, pt, p5k: Math.round(riegel(pt*q, q*1000, raceDistM)) }; }
 /* Predikcija i QS (Strava lap-detekcija) IZVEDENI iz trenutnog stanja sesija —
    pozivati posle bilo koje applyEdit, tako da oba ostanu dosledna izmeni
    (npr. promenjena dužina ponavljanja mora da promeni i šta sync traži u lapovima). */
@@ -334,11 +391,11 @@ function deriveQS(weeks){
   }));
   return qs;
 }
-function derivePred(weeks){
+function derivePred(weeks,raceDistM){
   const pred=[];
   weeks.forEach(w=>w.days.forEach(d=>{
     if(!d.session) return;
-    pred.push(predRow(w.w, d.session.kind, sessQKm(d.session), d.session.paceSec));
+    pred.push(predRow(w.w, d.session.kind, sessQKm(d.session), d.session.paceSec, raceDistM));
   }));
   return pred;
 }
@@ -374,20 +431,24 @@ function nextMonday(ds){
   return d.toISOString().slice(0,10);
 }
 function generatePlan(inp){
+  const raceDistM = inp.raceDistM||5000;
+  const prof = DIST_PROFILES[raceDistM];
+  if(!prof) return { error: 'Nepodržana ciljna distanca. Podržano: 5K, 10K, polumaraton, maraton.' };
   const start = nextMonday(inp.startDate);
   const daysN = Math.round((new Date(inp.raceDate) - new Date(start)) / 86400000);
   const weeks = Math.floor(daysN/7) + 1;
-  if(weeks < 6) return { error: 'Manje od 6 nedelja do trke — puna periodizacija nije moguća. Skraćeni protokol nije deo v1.' };
-  if(weeks > 20) return { error: 'Više od 20 nedelja — izaberi kasniji start plana.' };
+  const maxWeeks = raceDistM>=42195 ? 32 : 20; /* maraton planovi legitimno duži — Daniels-ovi 18-24 ned. programi */
+  if(weeks < prof.minWeeks) return { error: `Manje od ${prof.minWeeks} nedelja do trke (minimum za ${prof.name}) — puna periodizacija nije moguća.` };
+  if(weeks > maxWeeks) return { error: `Više od ${maxWeeks} nedelja — izaberi kasniji start plana.` };
   const runDays = Math.max(2, Math.min(7, Math.round(inp.runDays||4)));
   const qWant = Math.max(1, Math.min(2, Math.round(inp.quality||2)));
   const slots = buildDaySlots(runDays, qWant, { lrDow: inp.lrDow, qDows: inp.qDows });
   const dayWarnings = dayPrefWarnings(slots);
   const effQ = Object.values(slots).filter(r=>r==='q1'||r==='q2').length;
-  const a = assess(inp.pb, weeks, inp.intensity, inp.goalSec||null);
+  const a = assess(inp.pb, weeks, inp.intensity, inp.goalSec||null, raceDistM);
   a.start = start;
 
-  /* volumen: start→vrhunac uz +8% cap, deload svake 4., taper 2 nedelje (NEPROMENJENO — kalibrisano na etalon) */
+  /* volumen: start→vrhunac uz +8% cap, deload svake 4., taper 2 nedelje (NEPROMENJENO — kalibrisano na etalon, distancno-agnostičko po dizajnu) */
   const vols=[]; let cur=Math.max(15, Math.min(inp.weeklyKm, 90));
   const peakTarget = Math.min(cur*2.1, cur + weeks*2.2, 90);
   for(let w=1; w<=weeks; w++){
@@ -404,16 +465,16 @@ function generatePlan(inp){
   function peak(arr){ return Math.max(...arr, cur); }
 
   const rampWeeks = weeks-2;
-  const racePace = Math.round((inp.goalSec||a.predictedSec)/5);
+  const racePace = Math.round((inp.goalSec||a.predictedSec)/(raceDistM/1000));
   const raceDow = daysN - (weeks-1)*7 + 1; /* 1..7 unutar poslednje nedelje */
-  const plan={ weeks:[], pred:[], qs:{}, meta:{...a, weeks, intensity:inp.intensity, racePace, runDays, quality:effQ, dayWarnings} };
+  const plan={ weeks:[], pred:[], qs:{}, meta:{...a, weeks, intensity:inp.intensity, racePace, runDays, quality:effQ, dayWarnings, raceDistM, raceName:prof.name} };
   const strengthDow = (runDays<=5) ? pickStrengthDay(slots) : null;
 
   function D(dow,tag,km,desc){ return {dow,tag,km,desc}; }
   function REST(dow,desc){ return {dow,rest:true,desc:desc||null}; }
   function pushPredQs(dayObj,w){
     const ses=dayObj.session;
-    plan.pred.push(predRow(w, ses.kind, sessQKm(ses), ses.paceSec));
+    plan.pred.push(predRow(w, ses.kind, sessQKm(ses), ses.paceSec, raceDistM));
     if(ses.type==='int') plan.qs['n'+w+'d'+dayObj.dow]=[ses.repM];
     else if(ses.type==='tempo') plan.qs['n'+w+'d'+dayObj.dow]=[Math.round(ses.qKm*1000)];
   }
@@ -422,6 +483,7 @@ function generatePlan(inp){
     const vdotW = a.vdot0 + (a.vdotGoal-a.vdot0)*Math.min(w,rampWeeks)/rampWeeks;
     const pI=Math.max(paceForZone(vdotW,'I'), racePace);
     const pT=paceForZone(vdotW,'T'), pE=paceForZone(vdotW,'E'), pLR=paceForZone(vdotW,'LR');
+    const pM=paceForZone(vdotW,'M'); /* koristi se samo kad prof.useM (maraton) — bezopasno računati uvek */
     const vol=vols[w-1];
     const isDeload = w%DELOAD_EVERY===0 && w<weeks-2;
     const isTaper1 = w===weeks-1, isRace = w===weeks;
@@ -430,14 +492,15 @@ function generatePlan(inp){
     if(isRace){
       /* trkačka nedelja pozicionirana po STVARNOM danu trke, ne fiksno četvrtak */
       const rp=racePace;
+      const distKm=(raceDistM/1000).toFixed(1).replace(/\.0$/,'').replace('.',',');
       const mk={
         [raceDow-3]: dw=>D(dw,'lako',3,`3 km shakeout (skroz lagano) + lagani core`),
         [raceDow-2]: dw=>D(dw,'int',3.7,`1.5 km WU + 6×200 m @ ${fmtP(Math.max(rp-4,pI-6))}/km (200 m hod) + 1 km CD (aktivacija)`),
         [raceDow-1]: dw=>D(dw,'lako',2,`2 km shakeout + lagana mobilnost`),
-        [raceDow]:   dw=>D(dw,'trka',5,`🏁 TRKA 5 km — cilj ${fmtP(inp.goalSec||a.predictedSec)} / ritam ${fmtP(rp)}/km`)
+        [raceDow]:   dw=>D(dw,'trka',raceDistM/1000,`🏁 TRKA ${distKm} km (${prof.name}) — cilj ${fmtP(inp.goalSec||a.predictedSec)} / ritam ${fmtP(rp)}/km`)
       };
       for(let dw=1; dw<=raceDow; dw++){ days.push(mk[dw]? mk[dw](dw) : REST(dw)); }
-      if(raceDow-2>=1){ plan.pred.push(predRow(w,'Intervali',1.2,Math.max(rp-4,pI-6))); plan.qs['n'+w+'d'+(raceDow-2)]=[200]; }
+      if(raceDow-2>=1){ plan.pred.push(predRow(w,'Intervali',1.2,Math.max(rp-4,pI-6),raceDistM)); plan.qs['n'+w+'d'+(raceDow-2)]=[200]; }
     } else {
       /* kvalitetne sesije po slotovima (deload: nema kvaliteta; N1: samo q1, kao uvodna) */
       const sessions={};
@@ -451,14 +514,14 @@ function generatePlan(inp){
           sessions[dow]=sessTempo(dow,2,qT,pT,2);
           continue;
         }
-        sessions[dow]=buildQuality(w,weeks,role,effQ,vol,pI,pT,pE,isTaper1,dow,racePace);
+        sessions[dow]=buildQuality(w,weeks,role,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,prof.qMix,pM);
       }
       const qKms=Object.values(sessions).map(d=>d.km||0);
       const easyDowsCount=[1,2,3,4,5,6,7].filter(d=>{
         const role=slots[d];
         return role==='easy' || ((role==='q1'||role==='q2') && !sessions[d]);
       }).length;
-      const alloc=allocEasyLR(vol, qKms, easyDowsCount, runDays);
+      const alloc=allocEasyLR(vol, qKms, easyDowsCount, runDays, pLR);
       let ei=0;
       for(let dow=1; dow<=7; dow++){
         const role=slots[dow];
@@ -598,4 +661,4 @@ function predictRange(laps, specs, qKm){
 }
 
 if(typeof module!=='undefined')module.exports=Object.assign(module.exports,{sessInt,sessTempo,sessKm,sessDesc,applyEdit,deriveQS,derivePred,mergeOverrides,predRow,fmtRest});
-if(typeof module!=='undefined')module.exports=Object.assign(module.exports,{workLapsTempo,blockTempo,predictRange,riegelV2});
+if(typeof module!=='undefined')module.exports=Object.assign(module.exports,{workLapsTempo,blockTempo,predictRange,riegelV2,danielsLRCapKm,DIST_PROFILES});

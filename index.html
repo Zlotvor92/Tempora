@@ -526,7 +526,7 @@ function computeRecalPreview(day, workPaceSec){
 }
 function planInputFromMeta(){
   const m=S.meta;
-  return { startDate:m.startDate, raceDate:m.raceDate, pb:m.pb, weeklyKm:m.weeklyKm,
+  return { startDate:m.startDate, raceDate:m.raceDate, raceDistM:m.raceDistM, pb:m.pb, weeklyKm:m.weeklyKm,
     runDays:m.runDays, quality:m.quality, lrDow:m.lrDow, qDows:m.qDows, intensity:m.intensity, goalSec:m.goalSec };
 }
 function applyRecal(recal, newVdot, wIdx){
@@ -543,7 +543,7 @@ function applyRecal(recal, newVdot, wIdx){
 /* ============ ONBOARDING WIZARD (adaptirano iz testiranog wizard.html) ============ */
 const TOTAL_STEPS=4;
 let obStep=1;
-let wiz={ raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
+let wiz={ raceDist:5000, raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
 function pbUsesHours(){ return wiz.pbDist>=HOURS_FROM; }
 function pbTotalSec(){
   const h=pbUsesHours()?(+wiz.pbH||0):0, m=+wiz.pbMin, s=+wiz.pbSec;
@@ -572,8 +572,16 @@ function renderOnboard(){
     <div class="ob-progress" id="ob-progress"></div>
     <div class="ob-step active" data-step="1">
       <div class="ob-eyebrow">Korak 1 / 4</div>
-      <div class="ob-h1">Kad je trka?</div>
-      <div class="ob-sub">Plan se računa unazad od ovog datuma. Trenutna verzija generatora cilja isključivo 5&nbsp;km trku.</div>
+      <div class="ob-h1">Za koju trku se spremaš?</div>
+      <div class="ob-sub">Podržane distance: 5K, 10K, polumaraton, maraton. Struktura plana (dugo trčanje, tempo rad) zavisi od ovoga.</div>
+      <div class="ob-field"><label>Ciljna distanca</label>
+        <div class="ob-chiprow" id="raceDistChips">
+          <button type="button" class="ob-chip on" data-v="5000">5K</button>
+          <button type="button" class="ob-chip" data-v="10000">10K</button>
+          <button type="button" class="ob-chip" data-v="21097.5">Polumaraton</button>
+          <button type="button" class="ob-chip" data-v="42195">Maraton</button>
+        </div>
+      </div>
       <div class="ob-field"><label>Datum trke</label><input type="date" id="in-raceDate" min="${todayStr()}"></div>
       <div class="ob-err" id="ob-err-1"></div>
     </div>
@@ -714,6 +722,10 @@ function updateVdotPreview(){
 }
 function bindOnboardEvents(){
   $('#in-raceDate').addEventListener('input',e=>{ wiz.raceDate=e.target.value; goObStep(obStep); });
+  $$('#raceDistChips .ob-chip').forEach(c=>c.addEventListener('click',()=>{
+    $$('#raceDistChips .ob-chip').forEach(x=>x.classList.remove('on')); c.classList.add('on');
+    wiz.raceDist=+c.dataset.v;
+  }));
   $$('#pbDistChips .ob-chip').forEach(c=>c.addEventListener('click',()=>{
     $$('#pbDistChips .ob-chip').forEach(x=>x.classList.remove('on')); c.classList.add('on');
     wiz.pbDist=+c.dataset.v; syncHoursUI(); goObStep(obStep); updateVdotPreview();
@@ -758,7 +770,7 @@ function finishOnboarding(){
   const goalSec=(wiz.goalMin!==''&&wiz.goalSec!=='') ? (+wiz.goalMin)*60+(+wiz.goalSec) : null;
   const rawStart=todayStr();
   const meta={
-    startDate: rawStart, raceDate: wiz.raceDate,
+    startDate: rawStart, raceDate: wiz.raceDate, raceDistM: wiz.raceDist,
     pb:{ distM:wiz.pbDist, sec:pbSec }, weeklyKm:+wiz.weeklyKm,
     runDays:wiz.runDays, quality:wiz.quality, lrDow:wiz.lrDow, qDows:wiz.qDays.slice(),
     intensity:wiz.intensity, goalSec
@@ -784,15 +796,16 @@ const openW=new Set();
 
 function renderHeader(){
   let t;
+  const rn=S.plan&&S.plan.meta.raceName ? S.plan.meta.raceName+' · ' : ''; /* fallback prazno za stare planove bez ovog polja */
   if(!S.plan){t='';}
   else if(TODAY<S.meta.startDate){
     const dd=diffD(TODAY,S.meta.startDate);
-    t='Premošćavanje · plan počinje za '+dd+' '+plDan(dd);
+    t=rn+'Premošćavanje · plan počinje za '+dd+' '+plDan(dd);
   }
-  else if(TODAY>S.meta.raceDate)t='Plan završen · Trka: '+fmtDY(S.meta.raceDate);
+  else if(TODAY>S.meta.raceDate)t=rn+'Plan završen · Trka: '+fmtDY(S.meta.raceDate);
   else{
     const w=weekOf(TODAY),dd=diffD(TODAY,S.meta.raceDate);
-    t=(w?'Nedelja '+w.w+' / '+S.plan.weeks.length+' · ':'')+(dd===0?'DANAS JE TRKA 🏁':dd+' '+plDan(dd)+' do trke');
+    t=rn+(w?'Nedelja '+w.w+' / '+S.plan.weeks.length+' · ':'')+(dd===0?'DANAS JE TRKA 🏁':dd+' '+plDan(dd)+' do trke');
   }
   $('#h-sub').textContent=t;
 }
@@ -1444,7 +1457,7 @@ function restartWizard(){
   save();
   closeSheet();
   $('#appHeader').style.display='none';$('#appMain').style.display='none';$('#tabbar').style.display='none';
-  wiz={ raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
+  wiz={ raceDist:5000, raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
   renderOnboard();
   $('#onboard').style.display='';
 }
