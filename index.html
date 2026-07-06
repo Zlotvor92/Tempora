@@ -307,7 +307,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
   </button>
   <button data-pg="koleno">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.2-5 3.6 10 2.2-5H21"/></svg>
-    <span>Koleno</span>
+    <span>Povrede</span>
   </button>
   <button data-pg="pred">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h13l-2.5 4L18 12H5"/></svg>
@@ -319,7 +319,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
 <script>
 'use strict';
 /* ============ KONSTANTE ============ */
-const SCHEMA=1, LS_KEY='sub19v3-v1';
+const SCHEMA=2, LS_KEY='sub19v3-v1';
 const DOW=['Pon','Uto','Sre','Čet','Pet','Sub','Ned'];
 const DOWL=['ponedeljak','utorak','sreda','četvrtak','petak','subota','nedelja'];
 const MES=['januara','februara','marta','aprila','maja','juna','jula','avgusta','septembra','oktobra','novembra','decembra'];
@@ -372,7 +372,7 @@ function seedState(){return {
  plan:null,            /* generatePlan() izlaz — jedini izvor rasporeda dok se ne rekalibriše */
  vdotSmoothed:null,    /* tekuća zaglađena forma za adaptivnu rekalibraciju */
  log:{},               /* trening unosi, isti oblik kao v2 */
- knee:[],              /* {id,date,act,pain,note} — bez pragova/preporuka (v3 odluka) */
+ injuries:[],          /* {id,marker,date,act,pain,note} — generičko, ne fiksno na koleno; bez pragova/preporuka */
  kg:[],                /* {date,kg} */
  weightTarget:null,    /* {startKg,goalKg} — opciono, korisnik unosi u Podešavanjima */
  pred:{},              /* ručni tempo unosi za redove bez lap podataka (nema Strave u v3 još) */
@@ -382,9 +382,15 @@ function migrate(o){
   if(!o||typeof o!=='object')return null;
   if(o.meta===undefined)return null; /* nije v3 fajl */
   o.v=o.v||1;
-  o.log=o.log||{};o.knee=o.knee||[];o.kg=o.kg||[];o.pred=o.pred||{};
+  o.log=o.log||{};o.kg=o.kg||[];o.pred=o.pred||{};
   o.weightTarget=o.weightTarget||null;o.vdotSmoothed=o.vdotSmoothed!=null?o.vdotSmoothed:null;
   o.ui=Object.assign({firstRun:null,lastBackup:null,snooze:null},o.ui||{});
+  if(o.v<2){ /* v1->v2: generičko praćenje povreda umesto fiksnog "koleno" — ništa se ne gubi */
+    o.injuries=(o.knee||[]).map(k=>({...k, marker:k.marker||'Koleno'}));
+  }else{
+    o.injuries=o.injuries||[];
+  }
+  delete o.knee;
   o.v=SCHEMA;
   return o;
 }
@@ -405,6 +411,10 @@ let BY_ID={},BY_DATE={},DATED=[],TOTAL_TR=0;
 function indexPlan(){
   BY_ID={};BY_DATE={};DATED=[];TOTAL_TR=0;
   if(!S.plan)return;
+  (S.plan.bridge||[]).forEach(d=>{
+    BY_ID[d.id]=d; BY_DATE[d.date]=d;
+    if(!d.rest)DATED.push(d); /* prikazuje se u "sledeći trening", NE broji se u TOTAL_TR — nije deo periodizovanog plana */
+  });
   S.plan.weeks.forEach(w=>{
     w.days.forEach(d=>{
       d.id='n'+w.w+'d'+d.dow;
@@ -429,6 +439,29 @@ function weekOf(dateStr){
 }
 function tagName(t){return{lako:'Lako',tempo:'Tempo',int:'Intervali',lr:'Dugo (LR)',snaga:'Snaga',odmor:'Odmor',trka:'TRKA'}[t]||t;}
 function weekByNum(n){return S.plan.weeks.find(w=>w.w===n);}
+/* ============================================================
+   PREMOŠĆAVAJUĆI DANI — kad se plan generiše van ponedeljka.
+   NIJE periodizacija — nema trenažnu logiku, samo par laganih
+   trčanja da korisnik ne čeka prazan ekran do 6 dana. Pravilo je
+   inženjersko, ne naučno: naizmenično trči/odmor, POSLEDNJI dan
+   pre ponedeljka je UVEK odmor (ulazak u plan odmoran).
+   Distanca = weeklyKm/6, ograničeno 3–6 km — namerno skromno.
+   ============================================================ */
+function buildBridgeDays(rawStart, monday, weeklyKm){
+  const gap=diffD(rawStart,monday);
+  if(gap<=0) return [];
+  const km=Math.max(3,Math.min(6,Math.round(weeklyKm/6)));
+  const days=[];
+  for(let i=0;i<gap;i++){
+    const date=addD(rawStart,i);
+    const isLast=i===gap-1;
+    const run=!isLast && i%2===0;
+    days.push({ id:'b'+date, date, bridge:true, rest:!run,
+      tag:run?'lako':undefined, km:run?km:null,
+      desc:run?`${km} km lako (Z2) — premošćavanje do početka plana u ponedeljak`:'Odmor pred početak plana' });
+  }
+  return days;
+}
 function sessionKind(d){return d.session?d.session.kind:tagName(d.tag);}
 
 /*==DOM==*/
@@ -723,15 +756,17 @@ function bindOnboardEvents(){
 function finishOnboarding(){
   const pbSec=pbTotalSec();
   const goalSec=(wiz.goalMin!==''&&wiz.goalSec!=='') ? (+wiz.goalMin)*60+(+wiz.goalSec) : null;
+  const rawStart=todayStr();
   const meta={
-    startDate: todayStr(), raceDate: wiz.raceDate,
+    startDate: rawStart, raceDate: wiz.raceDate,
     pb:{ distM:wiz.pbDist, sec:pbSec }, weeklyKm:+wiz.weeklyKm,
     runDays:wiz.runDays, quality:wiz.quality, lrDow:wiz.lrDow, qDows:wiz.qDays.slice(),
     intensity:wiz.intensity, goalSec
   };
   const plan=generatePlan(meta);
   if(plan.error){ $('#ob-err-1').textContent=plan.error; goObStep(1); return; }
-  meta.startDate = plan.meta.start; /* KRITIČNO: poravnaj na isti ponedeljak koji je generatePlan interno koristio — inače se dow-oznake (Pon/Sre/Pet) ne poklapaju sa stvarnim kalendarskim danima */
+  meta.startDate = plan.meta.start; /* KRITIČNO: poravnaj na isti ponedeljak koji je generatePlan interno koristio */
+  plan.bridge = buildBridgeDays(rawStart, meta.startDate, meta.weeklyKm);
   S.meta=meta; S.meta._vdotAtGen=plan.meta.vdot0;
   S.plan=plan; S.vdotSmoothed=plan.meta.vdot0;
   save(); indexPlan();
@@ -750,7 +785,10 @@ const openW=new Set();
 function renderHeader(){
   let t;
   if(!S.plan){t='';}
-  else if(TODAY<S.meta.startDate)t='Start uskoro · Trka: '+fmtDY(S.meta.raceDate);
+  else if(TODAY<S.meta.startDate){
+    const dd=diffD(TODAY,S.meta.startDate);
+    t='Premošćavanje · plan počinje za '+dd+' '+plDan(dd);
+  }
   else if(TODAY>S.meta.raceDate)t='Plan završen · Trka: '+fmtDY(S.meta.raceDate);
   else{
     const w=weekOf(TODAY),dd=diffD(TODAY,S.meta.raceDate);
@@ -811,17 +849,21 @@ function nextLine(from){
   const nx=DATED.find(x=>x.date>from);
   return nx?`<div class="note-src">Sledeći trening: ${DOW[nx.dow-1]} ${fmtD(nx.date)} — ${sessionKind(nx)}${nx.km?' · '+fmtKm(nx.km)+' km':''}</div>`:'';
 }
+function dowFromDate(dateStr){return (s2d(dateStr).getDay()+6)%7;} /* 0=Pon..6=Ned, iz apsolutnog datuma — za bridge dane bez .dow */
 function dayCard(d){
   const s=stFor(d.id);
+  const dowLabel = d.bridge ? DOW[dowFromDate(d.date)] : DOW[d.dow-1];
   let c=`<div class="card" id="tcard">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-      <span class="tag ${d.tag}">${sessionKind(d)}</span>
+      <span class="tag ${d.tag}">${d.bridge?'Premošćavanje':sessionKind(d)}</span>
       <span class="st ${s}">${s==='done'?'Odrađen':s==='skip'?'Preskočen':'Predstoji'}</span>
     </div>
-    <div style="font-size:.72rem;color:var(--txt2);font-weight:700;margin-bottom:8px">N${d.weekNum} · ${DOW[d.dow-1]} ${fmtD(d.date)}</div>
+    <div style="font-size:.72rem;color:var(--txt2);font-weight:700;margin-bottom:8px">${d.bridge?'Pre početka plana':'N'+d.weekNum} · ${dowLabel} ${fmtD(d.date)}</div>
     <div class="desc">${esc(d.desc)}</div>`;
-  const wk=weekByNum(d.weekNum);
-  c+=`<div class="meta">${d.km!=null?`<div><b>${fmtKm(d.km)} km</b>plan</div>`:''}<div><b>${fmtKm(wk.vol)} km</b>nedelja N${wk.w}</div><div><b>${weekDone(wk)}/${weekCountable(wk)}</b>treninga</div></div>`;
+  if(!d.bridge){
+    const wk=weekByNum(d.weekNum);
+    c+=`<div class="meta">${d.km!=null?`<div><b>${fmtKm(d.km)} km</b>plan</div>`:''}<div><b>${fmtKm(wk.vol)} km</b>nedelja N${wk.w}</div><div><b>${weekDone(wk)}/${weekCountable(wk)}</b>treninga</div></div>`;
+  }
   if(s==='pending')c+=`<div class="btnrow"><button class="btn" data-a="done">Završi trening</button><button class="btn ghost" data-a="skip">Preskoči</button></div>`;
   else if(s==='skip')c+=`<div class="btnrow"><button class="btn ghost" data-a="done">Ipak sam odradio</button><button class="btn ghost sm" data-a="pending">Vrati</button></div>`;
   else c+=formHTML(d);
@@ -903,11 +945,11 @@ function bindForm(root,d){
 function syncSide(d){
   const l=S.log[d.id];if(!l)return;
   const kid='kt-'+d.id;
-  S.knee=S.knee.filter(k=>k.id!==kid);
-  if(l.knee!=null)S.knee.push({id:kid,src:d.id,date:l.ts||d.date,act:d.km!=null?'Trčanje':'Snaga',pain:l.knee,note:l.note||''});
+  S.injuries=S.injuries.filter(k=>k.id!==kid);
+  if(l.knee!=null)S.injuries.push({id:kid,src:d.id,marker:'Koleno',date:l.ts||d.date,act:d.km!=null?'Trčanje':'Snaga',pain:l.knee,note:l.note||''});
   S.kg=S.kg.filter(x=>x.src!==d.id);
   if(l.kg!=null)S.kg.push({date:l.ts||d.date,kg:l.kg,src:d.id});
-  S.knee.sort((a,b)=>a.date<b.date?-1:1);
+  S.injuries.sort((a,b)=>a.date<b.date?-1:1);
   S.kg.sort((a,b)=>a.date<b.date?-1:1);
 }
 function donePop(){
@@ -951,6 +993,21 @@ function renderPlan(){
   if(!S.plan){el.innerHTML=`<div class="empty">Plan nije generisan.</div>`;return;}
   if(!openW.size){const w=weekOf(TODAY);openW.add(w?w.w:1);}
   let h='';
+  if((S.plan.bridge||[]).length){
+    h+=`<div class="card"><div class="card-t">Pre početka — premošćavanje</div>`;
+    S.plan.bridge.forEach(d=>{
+      const s=stFor(d.id);
+      h+=`<div class="day" style="padding:10px 0">
+        <button class="day-row" data-d="${d.id}" style="width:100%">
+          <div class="day-d">${DOW[dowFromDate(d.date)]}<small>${fmtD(d.date)}</small></div>
+          <div class="day-t" style="${d.rest?'color:var(--txt3)':''}">${d.rest?'Odmor':esc(d.desc)}</div>
+          <div class="day-km">${d.km!=null?fmtKm(d.km):''}</div>
+          ${d.rest?'<span class="st rest">—</span>':`<span class="st ${s}">${s==='done'?'✓':s==='skip'?'⏭':'○'}</span>`}
+        </button>
+      </div>`;
+    });
+    h+=`</div>`;
+  }
   S.plan.weeks.forEach(w=>{
     const pk=weekPlanKm(w),rk=weekRealKm(w),dn=weekDone(w),ct=weekCountable(w);
     const cur=weekOf(TODAY)===w;
@@ -1023,9 +1080,10 @@ function bindEditGrids(root){
 }
 function openDaySheet(id){
   const d=BY_ID[id],s=stFor(id);
+  const dowLabel = d.bridge ? DOW[dowFromDate(d.date)] : DOW[d.dow-1];
   openSheet(`
-    <div class="sh-t">N${d.weekNum} · ${DOW[d.dow-1]} ${fmtDY(d.date)}</div>
-    <div class="sh-s">${sessionKind(d)}${d.km!=null?' · plan '+fmtKm(d.km)+' km':''}</div>
+    <div class="sh-t">${d.bridge?'Premošćavanje':'N'+d.weekNum} · ${dowLabel} ${fmtDY(d.date)}</div>
+    <div class="sh-s">${d.bridge?(d.rest?'Odmor':'Lagano trčanje'):sessionKind(d)}${d.km!=null?' · plan '+fmtKm(d.km)+' km':''}</div>
     <div class="desc" style="font-size:.85rem">${esc(d.desc)}</div>
     <div class="seg" id="seg">
       <button data-s="pending" class="${s==='pending'?'on':''}">Predstoji</button>
@@ -1050,7 +1108,7 @@ function openDaySheet(id){
   if(del)del.onclick=()=>{
     if(!confirm('Obriši sve unete podatke za ovaj trening?'))return;
     delete S.log[id];
-    S.knee=S.knee.filter(k=>k.src!==id);
+    S.injuries=S.injuries.filter(k=>k.src!==id);
     S.kg=S.kg.filter(k=>k.src!==id);
     save();closeSheet();
   };
@@ -1157,23 +1215,63 @@ function chartTempo(){
   return svgW(W,H,g);
 }
 
-/* ---------- KOLENO (v3: bez pragova/preporuka — samo grafikon + log) ---------- */
+/* ---------- POVREDE (v3: generičko praćenje markera, ne fiksno na koleno) ---------- */
+let selMarker=null;
+function markerList(){
+  const s=new Set(S.injuries.map(x=>x.marker));
+  return [...s].sort();
+}
+/* Trend PO MARKERU — inženjerski prag (0,75 poena na skali 0–10), NE klinička
+   granica. Poredi prosek novije polovine unosa sa starijom polovinom ISTOG
+   markera (deljenje po BROJU unosa, ne po vremenskom prozoru — robusnije za
+   neredovno logovanje). <4 unosa = nedovoljno podataka, trend se ne prikazuje. */
+function markerTrend(marker){
+  const es=S.injuries.filter(x=>x.marker===marker).sort((a,b)=>a.date<b.date?-1:1);
+  if(es.length<4) return null;
+  const mid=Math.floor(es.length/2);
+  const avg=arr=>arr.reduce((a,b)=>a+b,0)/arr.length;
+  const prior=avg(es.slice(0,mid).map(e=>e.pain)), recent=avg(es.slice(mid).map(e=>e.pain));
+  const diff=recent-prior;
+  if(Math.abs(diff)<0.75) return {dir:'stable',diff};
+  return {dir:diff<0?'better':'worse',diff};
+}
+function trendBadge(t){
+  if(!t)return '';
+  if(t.dir==='better')return `<span style="color:var(--green);font-size:.68rem;font-weight:800">↓ poboljšanje</span>`;
+  if(t.dir==='worse')return `<span style="color:var(--red);font-size:.68rem;font-weight:800">↑ pogoršanje</span>`;
+  return `<span style="color:var(--txt3);font-size:.68rem;font-weight:800">→ stabilno</span>`;
+}
 function renderKnee(){
   const el=$('#pg-koleno');
-  const list=S.knee.slice().sort((a,b)=>a.date<b.date?1:-1);
-  let h=`<div class="card"><div class="card-t">Bol (0–10) kroz vreme</div>${chartKnee()}</div>`;
+  const markers=markerList();
+  if(!markers.length){
+    el.innerHTML=`<div class="card"><div class="card-t">Povrede</div><div class="empty">Nema unosa. Prati bilo koji marker — koleno, Ahilovu tetivu, IT band, šta god pratiš.</div></div>
+      <div class="btnrow"><button class="btn ghost" id="k-add">+ Dodaj unos</button></div>`;
+    $('#k-add').onclick=()=>openKneeSheet(null);
+    return;
+  }
+  if(!selMarker||!markers.includes(selMarker))selMarker=markers[0];
+  const trend=markerTrend(selMarker);
+  let h=`<div class="card">
+    <div class="card-t">Bol (0–10) kroz vreme</div>
+    <div class="ob-chiprow" id="markerChips" style="margin-bottom:10px">${markers.map(m=>`<button type="button" class="ob-chip${m===selMarker?' on':''}" data-m="${esc(m)}">${esc(m)}</button>`).join('')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:.72rem;color:var(--txt2);font-weight:700">${esc(selMarker)}</span>${trendBadge(trend)}</div>
+    ${chartKnee(selMarker)}
+  </div>`;
   h+=`<div class="btnrow" style="margin:0 0 14px"><button class="btn ghost" id="k-add">+ Dodaj unos</button></div>`;
+  const list=S.injuries.filter(k=>k.marker===selMarker).slice().sort((a,b)=>a.date<b.date?1:-1);
   h+=`<div class="card">`+(list.length?list.map(k=>`
     <button class="krow" data-k="${k.id}">
       <div class="kp ${k.pain>=6?'p2':k.pain>=1?'p1':'p0'}">${k.pain}</div>
       <div class="ki"><div class="kd">${DOW[(s2d(k.date).getDay()+6)%7]} ${fmtD(k.date)} <span style="color:var(--txt3)">· ${esc(k.act)}${k.src?' · iz treninga':''}</span></div>${k.note?`<div class="kn">${esc(k.note)}</div>`:''}</div>
-    </button>`).join(''):`<div class="empty">Nema unosa.</div>`)+`</div>`;
+    </button>`).join(''):`<div class="empty">Nema unosa za ${esc(selMarker)}.</div>`)+`</div>`;
   el.innerHTML=h;
+  el.querySelectorAll('#markerChips .ob-chip').forEach(c=>c.onclick=()=>{selMarker=c.dataset.m;renderKnee();});
   $('#k-add').onclick=()=>openKneeSheet(null);
   el.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>openKneeSheet(b.dataset.k));
 }
-function chartKnee(){
-  const es=S.knee.slice().sort((a,b)=>a.date<b.date?-1:1);
+function chartKnee(marker){
+  const es=S.injuries.filter(x=>x.marker===marker).sort((a,b)=>a.date<b.date?-1:1);
   if(!es.length)return `<div class="empty">Nema unosa.</div>`;
   const W=340,H=144,L=22,R=8,B=120,T=10;
   const d0=es[0].date,d1=es[es.length-1].date>TODAY?es[es.length-1].date:TODAY;
@@ -1188,13 +1286,19 @@ function chartKnee(){
   return svgW(W,H,g);
 }
 function openKneeSheet(id){
-  const k=id?S.knee.find(x=>x.id===id):{date:TODAY,act:'Trčanje',pain:0,note:''};
+  const k=id?S.injuries.find(x=>x.id===id):{marker:selMarker||'',date:TODAY,act:'Trčanje',pain:0,note:''};
   if(id&&!k)return;
   const acts=['Trčanje','Snaga','Odmor','Drugo'];
+  const markers=markerList();
   openSheet(`
-    <div class="sh-t">${id?'Unos — koleno':'Novi unos — koleno'}</div>
-    <div class="sh-s">${k.src?'Vezan za trening — izmena treninga ažurira ovaj unos':'Ručni unos'}</div>
+    <div class="sh-t">${id?'Unos — povreda':'Novi unos — povreda'}</div>
+    <div class="sh-s">${k.src?'Vezan za trening (bol u kolenu) — izmena treninga ažurira ovaj unos':'Ručni unos'}</div>
     <div class="f-grid">
+      <div class="f-field full"><label>Marker (šta pratiš)</label>
+        ${id?`<input type="text" id="kf-marker" value="${esc(k.marker)}" ${k.src?'disabled':''}>`
+            :`<input type="text" id="kf-marker" list="markerOpts" value="${esc(k.marker)}" placeholder="npr. Koleno, Ahilova tetiva…">
+              <datalist id="markerOpts">${markers.map(m=>`<option value="${esc(m)}">`).join('')}</datalist>`}
+      </div>
       <div class="f-field"><label>Datum</label><input type="date" id="kf-date" value="${k.date}"></div>
       <div class="f-field"><label>Aktivnost</label><select id="kf-act">${acts.map(a=>`<option${a===k.act?' selected':''}>${a}</option>`).join('')}</select></div>
       <div class="f-field full"><label>Bol (0–10) <span style="float:right;font-weight:800" id="kf-pv">${k.pain}</span></label><input type="range" id="kf-pain" min="0" max="10" step="1" value="${k.pain}"></div>
@@ -1209,23 +1313,29 @@ function openKneeSheet(id){
     if(id)save();
   };
   if(id){
-    sh.querySelector('#kf-date').onchange=e=>{if(e.target.value){k.date=e.target.value;S.knee.sort((a,b)=>a.date<b.date?-1:1);save();}};
+    const mkInp=sh.querySelector('#kf-marker');
+    if(mkInp&&!k.src)mkInp.onchange=e=>{if(e.target.value.trim()){k.marker=e.target.value.trim();save();}};
+    sh.querySelector('#kf-date').onchange=e=>{if(e.target.value){k.date=e.target.value;S.injuries.sort((a,b)=>a.date<b.date?-1:1);save();}};
     sh.querySelector('#kf-act').onchange=e=>{k.act=e.target.value;save();};
     sh.querySelector('#kf-note').oninput=e=>{k.note=e.target.value;save();};
     sh.querySelector('#kf-del').onclick=()=>{
       if(!confirm('Obriši ovaj unos?'))return;
-      S.knee=S.knee.filter(x=>x.id!==id);save();closeSheet();
+      S.injuries=S.injuries.filter(x=>x.id!==id);save();closeSheet();
     };
   }else{
     sh.querySelector('#kf-save').onclick=()=>{
-      S.knee.push({id:'k'+Date.now(),src:null,date:sh.querySelector('#kf-date').value||TODAY,act:sh.querySelector('#kf-act').value,pain:k.pain,note:sh.querySelector('#kf-note').value.trim()});
-      S.knee.sort((a,b)=>a.date<b.date?-1:1);
+      const marker=sh.querySelector('#kf-marker').value.trim();
+      if(!marker){sh.querySelector('#kf-marker').focus();return;}
+      selMarker=marker;
+      S.injuries.push({id:'k'+Date.now(),src:null,marker,date:sh.querySelector('#kf-date').value||TODAY,act:sh.querySelector('#kf-act').value,pain:k.pain,note:sh.querySelector('#kf-note').value.trim()});
+      S.injuries.sort((a,b)=>a.date<b.date?-1:1);
       save();closeSheet();
     };
   }
 }
 
 /*==DOM==*/
+
 
 /* ---------- PREDIKCIJA (redovi generisani iz plana, ne konstanta) ---------- */
 function renderPred(){
@@ -1291,7 +1401,7 @@ function openSettings(){
   const wt=S.weightTarget||{startKg:'',goalKg:''};
   openSheet(`
     <div class="sh-t">Podešavanja i podaci</div>
-    <div class="sh-s">${Object.keys(S.log).length} trening-unosa · ${S.knee.length} koleno · ${S.kg.length} težina</div>
+    <div class="sh-s">${Object.keys(S.log).length} trening-unosa · ${S.injuries.length} povreda · ${S.kg.length} težina</div>
     ${LS_OK?'':`<div class="kb warn"><div><div>Skladište nedostupno</div><small>Podaci žive samo dok je stranica otvorena.</small></div></div>`}
     <div class="card-t" style="margin-top:4px">Cilj telesne mase — opciono</div>
     <div class="f-grid">
@@ -1329,7 +1439,7 @@ function openSettings(){
   $('#s-restart').onclick=restartWizard;
 }
 function restartWizard(){
-  if(!confirm('Napraviti nov plan?\n\nBriše se: tekući plan, unosi treninga, predikcije.\nOstaje: istorija kolena, težine, cilj mase.\n\nOvo je nepovratno bez backupa.'))return;
+  if(!confirm('Napraviti nov plan?\n\nBriše se: tekući plan, unosi treninga, predikcije.\nOstaje: istorija povreda, težine, cilj mase.\n\nOvo je nepovratno bez backupa.'))return;
   S.plan=null; S.meta=null; S.log={}; S.pred={}; S.vdotSmoothed=null;
   save();
   closeSheet();
