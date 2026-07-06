@@ -12,7 +12,7 @@
      konzervativno 0.15 · standard 0.25 · agresivno 0.36
    ============================================================ */
 
-const Z = { I: 1.00, T: 0.88, M: 0.80, E: 0.70, LR: 0.68 };
+const Z = { I: 1.00, T: 0.88, M: 0.80, E: 0.70, LR: 0.68, R: 1.05 };
 /* Stope rasta VDOT/nedeljno:
    kons 0.15 i std 0.25 — unutar Danielsove trenerske smernice (~1 poen / 4–6 ned.,
    'Daniels' Running Formula'; ekspertska heuristika, NE kontrolisana studija).
@@ -259,18 +259,46 @@ function mkIntervals(dow,w,weeks,vol,pI){
   const {rep,n}=pickReps(qI,w,weeks);
   return sessInt(dow,1.5,n,rep,pI,120,1);
 }
+/* R (Repetition) — 105%+ VO2max, max 2 min/rep, odmor 1:2-1:3 po VREMENU
+   rada, plafon min(8km, 5% nedelje) — sve citirano (Daniels). Uvodi se
+   PRVO u ciklusu (Faza II "Early Quality"), fazi se izbacuje kad I postaje
+   prioritet (Faza III — potvrđeno pretragom pre implementacije). */
+function mkRepetition(dow,vol,pR){
+  const total=Math.min(vol*0.05, 8);
+  const repM=300; /* tipično 200-300m (izvori: "400m hard/jog", "200m ili 300m") */
+  const reps=Math.max(4, Math.round(total*1000/repM));
+  const restSec=Math.round((repM/1000)*pR*2.5); /* odmor ~1:2.5 po vremenu, sredina citiranog opsega 1:2-1:3 */
+  return sessInt(dow,1.5,reps,repM,pR,restSec,1,'Repeticije');
+}
 function mkFartlek(dow,w,pI,pE){
   const n=Math.min(12, 8+Math.floor(w/4));
   return sessFartlek(dow,1.5,n,60,60,pI,1,pE);
 }
 function mkTempoCont(dow,vol,pT,fixKm){
-  const qT=fixKm!=null?fixKm:r1(Math.max(3, Math.min(vol*0.10, (20*60)/pT*1, 6)));
+  /* Daniels: kontinuiran tempo ograničen na ~20 min BEZ OBZIRA na volumen —
+     to je i razlog zašto postoji odvojen "broken" tip (mkBroken) za veći
+     ukupan obim na T tempu. Fiksni 6km plafon je UKLONJEN — 20-minutni
+     vremenski plafon je jedini pravi limit i već je bio u formuli. */
+  const qT=fixKm!=null?fixKm:r1(Math.max(3, Math.min(vol*0.10, (20*60)/pT)));
   return sessTempo(dow,2,qT,pT,2);
 }
-function mkBroken(dow,w,vol,pT){
-  const total=Math.max(3.6, Math.min(vol*0.12, 7));
-  const repM=Math.round(total*1000/2/100)*100;
-  return sessInt(dow,2,2,repM,pT,90,2,'Tempo (broken)');
+function mkBroken(dow,w,weeks,vol,pT){
+  /* Daniels cruise-interval reps: 1,6-3,2 km (1-2 milje), rad:odmor ~5:1.
+     Ukupan obim na T tempu: 12% nedelje (postojalo i pre). Fiksni 7km
+     plafon je UKLONJEN — bio je niži od same 12% smernice već na 60+ km/ned
+     nedeljama (maraton), praveći plafon jedinim ograničavajućim faktorom
+     umesto volumena. Dužina repa raste sa fazom ciklusa (isto načelo kao
+     kod čistih intervala): kraći rep rano (1,6km), duži kasnije (do 3,2km —
+     Danielsova GORNJA granica za cruise intervale, ne izmišljen broj). */
+  const total=Math.max(3.6, vol*0.12);
+  const phase=w/weeks;
+  /* mkBroken se poziva SAMO dok je phase<0.30-0.35 (v. buildQuality) — pragovi
+     su zato preskalirani na taj STVARNO dostižan opseg, ne na ceo ciklus
+     (raniji 0.3/0.6 prag bi ostavio gornje pragove kao mrtav kod). */
+  const repKm = phase<0.15 ? 1.6 : phase<0.25 ? 2.0 : 2.4;
+  const reps=Math.max(2, Math.round(total/repKm));
+  const repM=Math.round(repKm*1000/100)*100;
+  return sessInt(dow,2,reps,repM,pT,90,2,'Tempo (broken)');
 }
 function mkProg(dow,vol,pT,pE){
   const total=r1(Math.max(5, Math.min(vol*0.20, 10)));
@@ -286,11 +314,12 @@ function mkMarathonPace(dow,vol,pM){
   const q=r1(Math.max(5, Math.min(vol*0.22, timeCapKm, 29)));
   return sessTempo(dow,1.5,q,pM,1.5,'Maratonski tempo');
 }
-function buildQuality(w,weeks,slotRole,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,qMix,pM){
+function buildQuality(w,weeks,slotRole,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,qMix,pM,pR){
   const phase=w/weeks;
   const fartlekEvery = qMix==='threshold' ? 4 : 3; /* HM: manje VO2max-varijeteta, više praga — Daniels: HM finalna faza = isključivo threshold */
   if(effQ===1){
     if(isTaper1) return sessInt(dow,1.5,5,400,Math.max(pI,racePace),90,1);
+    if(phase<0.25) return mkRepetition(dow,vol,pR); /* Faza II "Early Quality" (potvrđeno pretragom) — R pre I/T */
     const mod=w%3;
     if(mod===0 && phase<0.72) return mkFartlek(dow,w,pI,pE);
     if(mod===2) return mkTempoCont(dow,vol,pT);
@@ -298,18 +327,19 @@ function buildQuality(w,weeks,slotRole,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,q
   }
   if(slotRole==='q1'){
     if(isTaper1) return sessInt(dow,1.5,5,400,Math.max(pI,racePace),90,1);
+    if(phase<0.25) return mkRepetition(dow,vol,pR); /* isto — već testirana rotacija netaknuta od phase>=0.25 */
     if(w%fartlekEvery===0 && phase<0.72) return mkFartlek(dow,w,pI,pE);
     return mkIntervals(dow,w,weeks,vol,pI);
   }
   /* q2 */
   if(qMix==='marathon'){
     if(isTaper1) return mkTempoCont(dow,vol,pT,3);
-    if(phase<0.30) return mkBroken(dow,w,vol,pT);
+    if(phase<0.30) return mkBroken(dow,w,weeks,vol,pT);
     if(phase<0.55) return (w%2===1)? mkProg(dow,vol,pT,pE) : mkTempoCont(dow,vol,pT);
     return mkMarathonPace(dow,vol,pM); /* poslednja ~45% ciklusa: M-tempo dominira — Daniels "Final Quality" faza je maraton-specifična */
   }
   if(isTaper1) return mkTempoCont(dow,vol,pT,3);
-  if(phase<0.35) return mkBroken(dow,w,vol,pT);
+  if(phase<0.35) return mkBroken(dow,w,weeks,vol,pT);
   if(phase<0.75) return (w%2===1)? mkProg(dow,vol,pT,pE) : mkTempoCont(dow,vol,pT);
   return mkTempoCont(dow,vol,pT);
 }
@@ -485,9 +515,18 @@ function generatePlan(inp){
 
   for(let w=1; w<=weeks; w++){
     const vdotW = a.vdot0 + (a.vdotGoal-a.vdot0)*Math.min(w,rampWeeks)/rampWeeks;
-    const pI=Math.max(paceForZone(vdotW,'I'), racePace);
+    /* Specifičnost tek u POSLEDNJIH 6 nedelja pred taper — APSOLUTAN broj,
+       ne razlomak (w/weeks). Razlomak (weekPhase) se loše skalira na duge
+       planove (maraton 40+ ned.): pošto VDOT plato nastupa na FIKSNIH 20
+       nedelja (RAMP_CAP_WEEKS) bez obzira na dužinu plana, razlomak-prag bi
+       na dugom planu presekao već ravan plato veštačkim usporavanjem na
+       pola puta — dokazano testom (N25 3:28/km vs N45 4:04/km na istom
+       platou, trebalo bi identično). Apsolutan broj (poslednjih 6 nedelja)
+       ispravno prati "etalon N8-N13" nameru nezavisno od ukupne dužine. */
+    const pI = (weeks - w)<=6 ? Math.max(paceForZone(vdotW,'I'), racePace) : paceForZone(vdotW,'I');
     const pT=paceForZone(vdotW,'T'), pE=paceForZone(vdotW,'E'), pLR=paceForZone(vdotW,'LR');
     const pM=paceForZone(vdotW,'M'); /* koristi se samo kad prof.useM (maraton) — bezopasno računati uvek */
+    const pR=paceForZone(vdotW,'R'); /* koristi se samo u ranoj fazi (phase<0.25) — bezopasno računati uvek */
     const vol=vols[w-1];
     const isDeload = w%DELOAD_EVERY===0 && w<weeks-2;
     const isTaper1 = w===weeks-1, isRace = w===weeks;
@@ -514,11 +553,11 @@ function generatePlan(inp){
         if(isDeload) continue;
         if(w===1 && role==='q2') continue;
         if(w===1 && role==='q1'){ /* uvodna: kontinuirani tempo umesto intervala */
-          const qT=r1(Math.max(2, Math.min(vol*0.18, 5)));
+          const qT=r1(Math.max(2, Math.min(vol*0.18, (20*60)/pT, 5)));
           sessions[dow]=sessTempo(dow,2,qT,pT,2);
           continue;
         }
-        sessions[dow]=buildQuality(w,weeks,role,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,prof.qMix,pM);
+        sessions[dow]=buildQuality(w,weeks,role,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,prof.qMix,pM,pR);
       }
       const qKms=Object.values(sessions).map(d=>d.km||0);
       const easyDowsCount=[1,2,3,4,5,6,7].filter(d=>{
@@ -584,7 +623,19 @@ function recalibratedPlan(originalInput, currentWeekIdx, vdotNowSmoothed, oldWee
   const rampWeeks = Math.min(weeksTotal - 2, RAMP_CAP_WEEKS);
   const backdated = vdotNowSmoothed - RAMP[originalInput.intensity] * Math.min(currentWeekIdx-1, rampWeeks);
   const virtualPbSec = raceTimeForVdot(Math.max(backdated, 20), 5000);
-  const replanned = generatePlan({ ...originalInput, pb:{ distM:5000, sec:virtualPbSec } });
+  /* KRITIČNO: racePace mora ostati stabilan. Ako korisnik NIJE zadao goalSec,
+     bez ove linije bi generatePlan iznutra računao FRESH predictedSec iz
+     VEŠTAČKE (backdated) putanje — koja može ispasti sporija od stvarne
+     trenutne forme (vdotNowSmoothed), jer predstavlja projekciju do KRAJA
+     plana, ne trenutno stanje. Taj (pogrešno spor) racePace onda kroz
+     Math.max(paceForZone(vdotW,'I'), racePace) veštački uspori intervale —
+     korisnik uneseta TAČNO taj (već usporen) tempo i VDOT mu ispravno
+     "opadne" na taj usporen broj, iako je trening odradio bez odstupanja.
+     Rešenje: ako nema eksplicitnog cilja, koristi predikciju iz STVARNE
+     trenutne forme kao stabilan oslonac, ne iz veštačke putanje. */
+  const raceDistM = originalInput.raceDistM||5000;
+  const stableGoalSec = originalInput.goalSec || raceTimeForVdot(vdotNowSmoothed, raceDistM);
+  const replanned = generatePlan({ ...originalInput, pb:{ distM:5000, sec:virtualPbSec }, goalSec: stableGoalSec });
   if(replanned.error) return replanned;
   const weeksSlice = replanned.weeks.slice(currentWeekIdx-1);
   if(oldWeeksForMerge){
@@ -619,7 +670,9 @@ function reentryPlan(originalInput, resumeWeekIdx, lastRealizedVolKm, vdotAtPaus
   if(weeksLeft < 4) return { error:'Manje od 4 nedelje do trke posle pauze — pun re-entry nije moguć. Cilj treba ručno preispitati.' };
   const backdated = vdotAtPause - RAMP[originalInput.intensity] * Math.min(resumeWeekIdx-1, Math.min(weeksTotal-2, RAMP_CAP_WEEKS));
   const virtualPbSec = raceTimeForVdot(Math.max(backdated,20), 5000);
-  const replanned = generatePlan({ ...originalInput, pb:{ distM:5000, sec:virtualPbSec } });
+  const raceDistM = originalInput.raceDistM||5000; /* ista ispravka kao recalibratedPlan — stabilan racePace, ne iz veštačke putanje */
+  const stableGoalSec = originalInput.goalSec || raceTimeForVdot(vdotAtPause, raceDistM);
+  const replanned = generatePlan({ ...originalInput, pb:{ distM:5000, sec:virtualPbSec }, goalSec: stableGoalSec });
   if(replanned.error) return replanned;
   /* prva nedelja po povratku: cap na lastRealizedVolKm umesto plana; GROW_MAX dalje sam vraća krivu */
   const w0 = replanned.weeks[resumeWeekIdx-1];
