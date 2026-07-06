@@ -25,6 +25,10 @@ const DELOAD_F = 0.73;          /* deload = 73% prethodne (etalon: 32/44) */
 const TAPER_F = 0.65;           /* pretposlednja = 65% vrhunca (etalon: 30/46) */
 const RACEWK_F = 0.30;          /* trkačka nedelja ≈ 30% vrhunca */
 const LR_SHARE = 0.24;          /* LR ≈ 24% nedelje (etalon: 23–25%) */
+const RAMP_CAP_WEEKS = 20;      /* inženjerski izbor (NE izmerena fiziološka granica): linearna
+  ekstrapolacija forme preko ovog broja nedelja bi projektovala apsurdan skok (npr. +20 VDOT
+  poena na 50 nedelja). Rast se ograničava na max 20 ned. neprekidnog linearnog napredovanja,
+  dalje se forma DRŽI (plato) — ovo NE ograničava dužinu samog plana, samo trajanje "rampe". */
 
 /* ============================================================
    buildDaySlots — PROMENLJIVI BROJ DANA TRČANJA (2–7) + BROJ
@@ -170,7 +174,7 @@ const DIST_PROFILES = {
 function assess(pb, weeks, intensity, goalSec, raceDistM){
   raceDistM = raceDistM||5000;
   const vdot0 = vdotFromRace(pb.distM, pb.sec);
-  const rampW = Math.max(weeks-2, 1);              /* rast staje pred taper */
+  const rampW = Math.min(Math.max(weeks-2, 1), RAMP_CAP_WEEKS);
   const vdotGoal = vdot0 + RAMP[intensity]*rampW;
   const predictedSec = raceTimeForVdot(vdotGoal, raceDistM);
   const out = { vdot0:r1(vdot0), vdotGoal:r1(vdotGoal), predictedSec, realno:null, goalVdot:null };
@@ -437,9 +441,9 @@ function generatePlan(inp){
   const start = nextMonday(inp.startDate);
   const daysN = Math.round((new Date(inp.raceDate) - new Date(start)) / 86400000);
   const weeks = Math.floor(daysN/7) + 1;
-  const maxWeeks = raceDistM>=42195 ? 32 : 20; /* maraton planovi legitimno duži — Daniels-ovi 18-24 ned. programi */
+  const maxWeeks = 104; /* bezbednosni plafon (2 god.) protiv degenerisanog unosa (npr. pogrešan datum), NE ograničenje planiranja — korisnik sme da se sprema koliko god unapred želi */
   if(weeks < prof.minWeeks) return { error: `Manje od ${prof.minWeeks} nedelja do trke (minimum za ${prof.name}) — puna periodizacija nije moguća.` };
-  if(weeks > maxWeeks) return { error: `Više od ${maxWeeks} nedelja — izaberi kasniji start plana.` };
+  if(weeks > maxWeeks) return { error: `Više od ${maxWeeks} nedelja (2 godine) — proveri datum trke, verovatno je pogrešno unet.` };
   const runDays = Math.max(2, Math.min(7, Math.round(inp.runDays||4)));
   const qWant = Math.max(1, Math.min(2, Math.round(inp.quality||2)));
   const slots = buildDaySlots(runDays, qWant, { lrDow: inp.lrDow, qDows: inp.qDows });
@@ -464,7 +468,7 @@ function generatePlan(inp){
   }
   function peak(arr){ return Math.max(...arr, cur); }
 
-  const rampWeeks = weeks-2;
+  const rampWeeks = Math.min(weeks-2, RAMP_CAP_WEEKS);
   const racePace = Math.round((inp.goalSec||a.predictedSec)/(raceDistM/1000));
   const raceDow = daysN - (weeks-1)*7 + 1; /* 1..7 unutar poslednje nedelje */
   const plan={ weeks:[], pred:[], qs:{}, meta:{...a, weeks, intensity:inp.intensity, racePace, runDays, quality:effQ, dayWarnings, raceDistM, raceName:prof.name} };
@@ -577,7 +581,7 @@ function recalibrate(vdotSmoothed, sessionPaceSecKm, zone, sessionType){
    ranijoj verziji (ništa se ne menja za postojeće pozive/testove). */
 function recalibratedPlan(originalInput, currentWeekIdx, vdotNowSmoothed, oldWeeksForMerge){
   const weeksTotal = Math.round((new Date(originalInput.raceDate) - new Date(nextMonday(originalInput.startDate))) / 604800000) + 1;
-  const rampWeeks = weeksTotal - 2;
+  const rampWeeks = Math.min(weeksTotal - 2, RAMP_CAP_WEEKS);
   const backdated = vdotNowSmoothed - RAMP[originalInput.intensity] * Math.min(currentWeekIdx-1, rampWeeks);
   const virtualPbSec = raceTimeForVdot(Math.max(backdated, 20), 5000);
   const replanned = generatePlan({ ...originalInput, pb:{ distM:5000, sec:virtualPbSec } });
@@ -613,7 +617,7 @@ function reentryPlan(originalInput, resumeWeekIdx, lastRealizedVolKm, vdotAtPaus
   const weeksTotal = Math.round((new Date(originalInput.raceDate) - new Date(nextMonday(originalInput.startDate))) / 604800000) + 1;
   const weeksLeft = weeksTotal - resumeWeekIdx + 1;
   if(weeksLeft < 4) return { error:'Manje od 4 nedelje do trke posle pauze — pun re-entry nije moguć. Cilj treba ručno preispitati.' };
-  const backdated = vdotAtPause - RAMP[originalInput.intensity] * Math.min(resumeWeekIdx-1, weeksTotal-2);
+  const backdated = vdotAtPause - RAMP[originalInput.intensity] * Math.min(resumeWeekIdx-1, Math.min(weeksTotal-2, RAMP_CAP_WEEKS));
   const virtualPbSec = raceTimeForVdot(Math.max(backdated,20), 5000);
   const replanned = generatePlan({ ...originalInput, pb:{ distM:5000, sec:virtualPbSec } });
   if(replanned.error) return replanned;
