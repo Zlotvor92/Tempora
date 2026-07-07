@@ -517,10 +517,23 @@ function generatePlan(inp){
 
   /* volumen: start→vrhunac uz +8% cap, deload svake 4., taper 2 nedelje (NEPROMENJENO — kalibrisano na etalon, distancno-agnostičko po dizajnu) */
   const vols=[]; let cur=Math.max(15, Math.min(inp.weeklyKm, 90));
-  const peakTarget = Math.min(cur*2.1, cur + weeks*2.2, 90);
+  /* peakTarget = compound rast starta preko svih RAMPNIH nedelja (ukupne minus
+     taper minus deloadovi), tako da se vrhunac dostigne TAČNO pred taper — ne na
+     sredini plana. Fiksni cur*2.1 je dostizao vrhunac prerano na dugim planovima
+     → plateau i nazubljeno oscilirање oko cap-a posle svakog deloada (bug na 20+
+     ned. planovima). Gornje granice (cur+weeks*2.2, 90) zadržane. */
+  const deloadCount = Math.floor((weeks-2)/DELOAD_EVERY);
+  const rampSteps = Math.max(weeks - 2 - deloadCount, 1);
+  const peakTarget = Math.min(cur*Math.pow(GROW_MAX, rampSteps), cur + weeks*2.2, 90);
   for(let w=1; w<=weeks; w++){
     if(w===weeks){ vols.push(r1(peak(vols)*RACEWK_F)); }
     else if(w===weeks-1){ vols.push(r1(peak(vols.length?vols:[cur])*TAPER_F)); }
+    else if(w<=baseWeeks){
+      /* Bazne nedelje: postepen blag rast od starta (deo iste rampe, ne nezavisan
+         niz). Bez ovoga kvalitetni ciklus posle baze skače kao da baze nema. */
+      if(w===baseWeeks && baseWeeks>=DELOAD_EVERY && w%DELOAD_EVERY===0){ vols.push(r1(vols[vols.length-1]*DELOAD_F)); }
+      else { cur = vols.length? Math.min(vols[vols.length-1]*GROW_MAX, peakTarget) : cur; vols.push(r1(cur)); }
+    }
     else if(w%DELOAD_EVERY===0 && w<weeks-2){ vols.push(r1(vols[vols.length-1]*DELOAD_F)); }
     else{
       const prev = vols.length?vols[vols.length-1]:cur/GROW_MAX;

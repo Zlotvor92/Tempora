@@ -5,7 +5,7 @@
    bio cache-first (dole, generička grana) — jednom keširan, NIKAD se nije
    ponovo preuzimao sa mreže dok se CACHE broj ručno ne podigne. Dve uzastopne
    ispravke u engine.js zato nikad nisu stigle do korisnikovog browsera. */
-const CACHE = 'sub19v3-cache-v4';
+const CACHE = 'sub19v3-cache-v5';
 const ASSETS = ['./', './index.html', './engine.js', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 const NETWORK_FIRST = ['./index.html', './engine.js'];
 
