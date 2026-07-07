@@ -6,11 +6,17 @@
    ponovo preuzimao sa mreže dok se CACHE broj ručno ne podigne. Dve uzastopne
    ispravke u engine.js zato nikad nisu stigle do korisnikovog browsera. */
 const CACHE = 'sub19v3-cache-v5';
+const APP_VERSION = '5';
 const ASSETS = ['./', './index.html', './engine.js', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 const NETWORK_FIRST = ['./index.html', './engine.js'];
 
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  /* NE skipWaiting ovde — čeka korisnikov klik na "Osveži" (baner), da se
+     update ne desi usred unosa podataka. Aktivira se tek na SKIP_WAITING. */
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(

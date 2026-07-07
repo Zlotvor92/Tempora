@@ -320,6 +320,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
 'use strict';
 /* ============ KONSTANTE ============ */
 const SCHEMA=2, LS_KEY='sub19v3-v1';
+const APP_VERSION='5'; /* mora se poklapati sa APP_VERSION u sw.js */
 const DOW=['Pon','Uto','Sre','Čet','Pet','Sub','Ned'];
 const DOWL=['ponedeljak','utorak','sreda','četvrtak','petak','subota','nedelja'];
 const MES=['januara','februara','marta','aprila','maja','juna','jula','avgusta','septembra','oktobra','novembra','decembra'];
@@ -1448,7 +1449,7 @@ function openSettings(){
     <div class="btnrow"><button class="btn ghost" id="s-imp">Uvezi backup</button></div>
     <input type="file" id="s-file" accept=".json,application/json" style="display:none">
     <hr class="sep">
-    <div class="note-src">Poslednji backup: ${S.ui.lastBackup?fmtDY(S.ui.lastBackup):'nikad'} · Šema: v${S.v} · Plan: ${TOTAL_TR} treninga / ${fmtKm(totalPlanKm())} km · Trka: ${fmtDY(S.meta.raceDate)}</div>
+    <div class="note-src">Poslednji backup: ${S.ui.lastBackup?fmtDY(S.ui.lastBackup):'nikad'} · Verzija: ${APP_VERSION} · Šema: v${S.v} · Plan: ${TOTAL_TR} treninga / ${fmtKm(totalPlanKm())} km · Trka: ${fmtDY(S.meta.raceDate)}</div>
     <hr class="sep">
     <div class="btnrow"><button class="btn danger" id="s-restart">Novi plan (ponovo pokreni wizard)</button></div>
     <div class="note-src">Briše TEKUĆI plan, unose treninga i predikcije. Istorija kolena, težine i cilj mase OSTAJU.</div>
@@ -1523,7 +1524,37 @@ if(S.plan){
   renderOnboard();
 }
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){
-  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  let refreshing=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(refreshing)return; refreshing=true; location.reload();
+  });
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    /* provera update-a pri svakom pokretanju i periodično */
+    reg.update();
+    setInterval(()=>reg.update(), 60*60*1000);
+    reg.addEventListener('updatefound',()=>{
+      const nw=reg.installing;
+      if(!nw)return;
+      nw.addEventListener('statechange',()=>{
+        /* novi SW instaliran i čeka, a stari još kontroliše -> ima update */
+        if(nw.state==='installed' && navigator.serviceWorker.controller){
+          showUpdateBanner(nw);
+        }
+      });
+    });
+  }).catch(()=>{});
+}
+function showUpdateBanner(worker){
+  if($('#update-banner'))return;
+  const b=document.createElement('div');
+  b.id='update-banner';
+  b.style.cssText='position:fixed;left:16px;right:16px;bottom:calc(var(--tab-h) + var(--sab) + 16px);z-index:70;background:var(--pink);color:#fff;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;font-weight:700;font-size:.9rem;box-shadow:0 8px 24px rgba(0,0,0,.4)';
+  b.innerHTML=`<span style="flex:1">Dostupna je nova verzija</span><button id="update-go" style="background:#fff;color:var(--pink);border:0;border-radius:10px;padding:8px 16px;font-weight:800;font-size:.85rem">Osveži</button>`;
+  document.body.appendChild(b);
+  $('#update-go').onclick=()=>{
+    b.querySelector('span').textContent='Osvežavam…';
+    worker.postMessage({type:'SKIP_WAITING'});
+  };
 }
 </script>
 </body>
