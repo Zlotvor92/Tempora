@@ -314,7 +314,16 @@ function mkMarathonPace(dow,vol,pM){
   const q=r1(Math.max(5, Math.min(vol*0.22, timeCapKm, 29)));
   return sessTempo(dow,1.5,q,pM,1.5,'Maratonski tempo');
 }
-function buildQuality(w,weeks,slotRole,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,qMix,pM,pR){
+/* Race-pace sesija — tempo TAČNO na ciljnom tempu trke (racePace = Riegel/VDOT
+   ishod, NE izmišljena %VO2max zona). Samo za 10K/HM: 5K već ima I≈race u
+   završnici, maraton ima M-tempo koji JESTE race pace. Trajanje umereno jer je
+   race pace zahtevan. "Practicing race pace" — svi izvori navode kao legitimno,
+   i direktno pokriva Danielsov POZNATI nedostatak (nema 10K/HM-specific pace). */
+function mkRacePace(dow,vol,racePace,label){
+  const q=r1(Math.max(3, Math.min(vol*0.12, 8)));
+  return sessTempo(dow,2,q,racePace,2,label);
+}
+function buildQuality(w,weeks,slotRole,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,qMix,pM,pR,raceName){
   const phase=w/weeks;
   const fartlekEvery = qMix==='threshold' ? 4 : 3; /* HM: manje VO2max-varijeteta, više praga — Daniels: HM finalna faza = isključivo threshold */
   if(effQ===1){
@@ -338,8 +347,15 @@ function buildQuality(w,weeks,slotRole,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,q
     if(phase<0.55) return (w%2===1)? mkProg(dow,vol,pT,pE) : mkTempoCont(dow,vol,pT);
     return mkMarathonPace(dow,vol,pM); /* poslednja ~45% ciklusa: M-tempo dominira — Daniels "Final Quality" faza je maraton-specifična */
   }
+  /* 10K/HM: race-pace sesija u završnoj fazi — pokriva Danielsov poznati
+     nedostatak (nema 10K/HM-specific pace). 5K isključen (I≈race u završnici). */
+  const wantsRacePace = (raceName==='10K' || raceName==='Polumaraton');
   if(isTaper1) return mkTempoCont(dow,vol,pT,3);
   if(phase<0.35) return mkBroken(dow,w,weeks,vol,pT);
+  if(phase>=0.60 && wantsRacePace){
+    const label = raceName==='10K' ? '10K tempo (ciljni ritam)' : 'HM tempo (ciljni ritam)';
+    return (w%2===1)? mkRacePace(dow,vol,racePace,label) : mkTempoCont(dow,vol,pT);
+  }
   if(phase<0.75) return (w%2===1)? mkProg(dow,vol,pT,pE) : mkTempoCont(dow,vol,pT);
   return mkTempoCont(dow,vol,pT);
 }
@@ -482,6 +498,23 @@ function generatePlan(inp){
   const a = assess(inp.pb, weeks, inp.intensity, inp.goalSec||null, raceDistM);
   a.start = start;
 
+  /* ============================================================
+     FAZA 1 (bazna) — samo lako trčanje + strides, bez kvaliteta.
+     Daniels: Faza I = aerobna baza, PRESKAČE se ako si trenirao
+     redovno. Km SAM NE razlikuje početnika od treniranog trkača
+     niskog obima (npr. 22 km/ned strukturirano = treniran). Zato
+     dve informacije: nizak km I eksplicitna potvrda da NIJE trenirao
+     redovno. <30 km je inženjerski prag (NE Danielsov broj); trajanje
+     fiksno 4 nedelje. Aktivira se samo ako posle baze ostaje pun
+     periodizovan ciklus (minWeeks). Default trainedRecently=true
+     (stari pozivi bez ovog polja NE dobijaju bazu — non-breaking). */
+  const BASE_THRESHOLD_KM = 30;   /* inženjerski prag, ne Danielsov podatak */
+  const BASE_WEEKS = 4;
+  const trainedRecently = inp.trainedRecently !== false; /* default true */
+  const wantsBase = (inp.weeklyKm < BASE_THRESHOLD_KM) && !trainedRecently && (weeks >= prof.minWeeks + BASE_WEEKS);
+  const baseWeeks = wantsBase ? BASE_WEEKS : 0;
+  const qualWeeks = weeks - baseWeeks;  /* nedelje u kojima se odvija kvalitetni ciklus */
+
   /* volumen: start→vrhunac uz +8% cap, deload svake 4., taper 2 nedelje (NEPROMENJENO — kalibrisano na etalon, distancno-agnostičko po dizajnu) */
   const vols=[]; let cur=Math.max(15, Math.min(inp.weeklyKm, 90));
   const peakTarget = Math.min(cur*2.1, cur + weeks*2.2, 90);
@@ -501,7 +534,7 @@ function generatePlan(inp){
   const rampWeeks = Math.min(weeks-2, RAMP_CAP_WEEKS);
   const racePace = Math.round((inp.goalSec||a.predictedSec)/(raceDistM/1000));
   const raceDow = daysN - (weeks-1)*7 + 1; /* 1..7 unutar poslednje nedelje */
-  const plan={ weeks:[], pred:[], qs:{}, meta:{...a, weeks, intensity:inp.intensity, racePace, runDays, quality:effQ, dayWarnings, raceDistM, raceName:prof.name} };
+  const plan={ weeks:[], pred:[], qs:{}, meta:{...a, weeks, intensity:inp.intensity, racePace, runDays, quality:effQ, dayWarnings, raceDistM, raceName:prof.name, baseWeeks} };
   const strengthDow = (runDays<=5) ? pickStrengthDay(slots) : null;
 
   function D(dow,tag,km,desc){ return {dow,tag,km,desc}; }
@@ -544,20 +577,44 @@ function generatePlan(inp){
       };
       for(let dw=1; dw<=raceDow; dw++){ days.push(mk[dw]? mk[dw](dw) : REST(dw)); }
       if(raceDow-2>=1){ plan.pred.push(predRow(w,'Intervali',1.2,Math.max(rp-4,pI-6),raceDistM)); plan.qs['n'+w+'d'+(raceDow-2)]=[200]; }
+    } else if(w <= baseWeeks){
+      /* FAZA 1 (bazna) — samo lako trčanje + obavezne strides, bez kvaliteta.
+         Gradi aerobnu bazu i obim pre nego što kvalitetni ciklus počne. */
+      const alloc=allocEasyLR(vol, [], runDays-1, runDays, pLR);
+      let ei=0;
+      for(let dow=1; dow<=7; dow++){
+        const role=slots[dow];
+        if(role==='rest'){
+          if(dow===strengthDow) days.push(D(dow,'snaga',null,`Mobilnost + snaga po sopstvenom programu — opciono (bez trčanja)`));
+          else days.push(REST(dow));
+          continue;
+        }
+        if(role==='lr'){
+          days.push(D(dow,'lr',alloc.lr,`${alloc.lr} km lako-dugo (Z2) @ ~${fmtP(pLR)}/km — bazna faza, bez kvaliteta`));
+          continue;
+        }
+        /* strides na svakom drugom lakom danu tokom baze (Daniels: strides kroz sve faze) */
+        const km=alloc.easies[ei]!=null?alloc.easies[ei]:4;
+        const strides = (ei%2===0) ? ' + 6×20 s strides (lagani ubrzani koraci, pun oporavak)' : '';
+        days.push(D(dow,'lako',km,`${km} km lako (Z2) @ ~${fmtP(pE)}/km${strides}`));
+        ei++;
+      }
     } else {
-      /* kvalitetne sesije po slotovima (deload: nema kvaliteta; N1: samo q1, kao uvodna) */
+      /* kvalitetne sesije po slotovima (deload: nema kvaliteta; prva kval. nedelja: samo q1, kao uvodna) */
+      const qualW = w - baseWeeks;         /* redni broj unutar kvalitetnog ciklusa (1-indeksiran) */
+      const isFirstQualWeek = qualW===1;
       const sessions={};
       for(let dow=1; dow<=7; dow++){
         const role=slots[dow];
         if(role!=='q1' && role!=='q2') continue;
         if(isDeload) continue;
-        if(w===1 && role==='q2') continue;
-        if(w===1 && role==='q1'){ /* uvodna: kontinuirani tempo umesto intervala */
+        if(isFirstQualWeek && role==='q2') continue;
+        if(isFirstQualWeek && role==='q1'){ /* uvodna: kontinuirani tempo umesto intervala */
           const qT=r1(Math.max(2, Math.min(vol*0.18, (20*60)/pT, 5)));
           sessions[dow]=sessTempo(dow,2,qT,pT,2);
           continue;
         }
-        sessions[dow]=buildQuality(w,weeks,role,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,prof.qMix,pM,pR);
+        sessions[dow]=buildQuality(qualW,qualWeeks,role,effQ,vol,pI,pT,pE,isTaper1,dow,racePace,prof.qMix,pM,pR,prof.name);
       }
       const qKms=Object.values(sessions).map(d=>d.km||0);
       const easyDowsCount=[1,2,3,4,5,6,7].filter(d=>{
@@ -579,7 +636,11 @@ function generatePlan(inp){
         }
         if(sessions[dow]){ days.push(sessions[dow]); pushPredQs(sessions[dow],w); continue; }
         const km=alloc.easies[ei]!=null?alloc.easies[ei]:4;
-        const strides = (isDeload&&ei===0)?' + 6×15 s strides' : ((!isDeload && w%2===0 && ei===alloc.easies.length-1)?' + 4×20 s strides':'');
+        /* Strides na prvom lakom danu SVAKE kval. nedelje (Daniels: kroz sve faze,
+           redovno — ne povremeno). Izostaju samo u taper1 (izbeći dodatni neuro-
+           stres neposredno pred trku). Deload: kraći set. */
+        const strides = isTaper1 ? ''
+          : (ei===0 ? (isDeload ? ' + 4×15 s strides (lagani ubrzani koraci)' : ' + 6×20 s strides (lagani ubrzani koraci, pun oporavak)') : '');
         days.push(D(dow,'lako',km,`${km} km lako (Z2) @ ~${fmtP(pE)}/km${strides}`));
         ei++;
       }

@@ -527,7 +527,7 @@ function computeRecalPreview(day, workPaceSec){
 function planInputFromMeta(){
   const m=S.meta;
   return { startDate:m.startDate, raceDate:m.raceDate, raceDistM:m.raceDistM, pb:m.pb, weeklyKm:m.weeklyKm,
-    runDays:m.runDays, quality:m.quality, lrDow:m.lrDow, qDows:m.qDows, intensity:m.intensity, goalSec:m.goalSec };
+    runDays:m.runDays, quality:m.quality, lrDow:m.lrDow, qDows:m.qDows, intensity:m.intensity, goalSec:m.goalSec, trainedRecently:m.trainedRecently };
 }
 function applyRecal(recal, newVdot, wIdx){
   /* Zamenjuje SAMO nedelje >= wIdx; istorija (odrađeni dani pre toga) netaknuta. */
@@ -543,7 +543,7 @@ function applyRecal(recal, newVdot, wIdx){
 /* ============ ONBOARDING WIZARD (adaptirano iz testiranog wizard.html) ============ */
 const TOTAL_STEPS=4;
 let obStep=1;
-let wiz={ raceDist:5000, raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
+let wiz={ raceDist:5000, raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', trainedRecently:true, runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
 function pbUsesHours(){ return wiz.pbDist>=HOURS_FROM; }
 function pbTotalSec(){
   const h=pbUsesHours()?(+wiz.pbH||0):0, m=+wiz.pbMin, s=+wiz.pbSec;
@@ -620,6 +620,13 @@ function renderOnboard(){
       <div class="ob-h1">Kako trčiš nedeljno?</div>
       <div class="ob-sub">Prosečna nedeljna kilometraža poslednje 2–3 nedelje, i koliko dana želiš da trčiš.</div>
       <div class="ob-field"><label>Nedeljno (km)</label><input type="number" id="in-weeklyKm" placeholder="npr. 22" min="5" max="120"></div>
+      <div class="ob-field"><label>Da li si trčao/la redovno zadnjih mesec dana?</label>
+        <div class="ob-chiprow" id="trainedChips">
+          <button type="button" class="ob-chip on" data-v="yes">Da, redovno</button>
+          <button type="button" class="ob-chip" data-v="no">Ne / tek počinjem</button>
+        </div>
+        <div class="ob-sub" style="margin:8px 0 0;font-size:.72rem">Ako nisi trčao/la redovno i obim ti je nizak, plan počinje sa 4 nedelje <b>bazne faze</b> — samo lagano trčanje da se izgradi kondicija, tek onda ubrzavanja i intervali. Redovnim trkačima ovo se preskače.</div>
+      </div>
       <div class="ob-field"><label>Dana trčanja nedeljno</label>
         <div class="ob-chiprow" id="runDaysChips">
           <button type="button" class="ob-chip" data-v="2">2</button><button type="button" class="ob-chip" data-v="3">3</button>
@@ -734,6 +741,10 @@ function bindOnboardEvents(){
   $('#in-pbMin').addEventListener('input',e=>{ e.target.value=clampDigits(e.target.value,2); wiz.pbMin=e.target.value; goObStep(obStep); updateVdotPreview(); });
   $('#in-pbSec').addEventListener('input',e=>{ e.target.value=clampDigits(e.target.value,2); wiz.pbSec=e.target.value; goObStep(obStep); updateVdotPreview(); });
   $('#in-weeklyKm').addEventListener('input',e=>{ wiz.weeklyKm=e.target.value; goObStep(obStep); });
+  $$('#trainedChips .ob-chip').forEach(c=>c.addEventListener('click',()=>{
+    $$('#trainedChips .ob-chip').forEach(x=>x.classList.remove('on')); c.classList.add('on');
+    wiz.trainedRecently = c.dataset.v==='yes';
+  }));
   $$('#runDaysChips .ob-chip').forEach(c=>c.addEventListener('click',()=>{
     $$('#runDaysChips .ob-chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); wiz.runDays=+c.dataset.v;
   }));
@@ -773,7 +784,7 @@ function finishOnboarding(){
     startDate: rawStart, raceDate: wiz.raceDate, raceDistM: wiz.raceDist,
     pb:{ distM:wiz.pbDist, sec:pbSec }, weeklyKm:+wiz.weeklyKm,
     runDays:wiz.runDays, quality:wiz.quality, lrDow:wiz.lrDow, qDows:wiz.qDays.slice(),
-    intensity:wiz.intensity, goalSec
+    intensity:wiz.intensity, goalSec, trainedRecently:wiz.trainedRecently
   };
   const plan=generatePlan(meta);
   if(plan.error){ $('#ob-err-1').textContent=plan.error; goObStep(1); return; }
@@ -977,15 +988,24 @@ function donePop(){
 function openRecalSheet(day, workPaceSec, preview){
   const oldPace = day.session.paceSec;
   const wIdx = preview.wIdx;
+  const baseline = S.vdotSmoothed||S.meta._vdotAtGen;
   const nextQ = preview.recal.weeks.flatMap(w=>w.days).find(dd=>dd.session && dd.session.kind===day.session.kind);
   const cmp = nextQ ? `<div class="rsub" style="margin-top:10px">Sledeća „${esc(nextQ.session.kind)}" sesija: <b>${fmtP(oldPace)}/km → ${fmtP(nextQ.session.paceSec)}/km</b></div>` : '';
+  /* Objašnjenje za slučaj koji zbunjuje: brže od NEDELJNOG plana, ali sporije
+     od već postojeće (povišene) bazne forme — dešava se kad je ranija sesija
+     (obično tempo, manje prigušenje) već podigla baznu vrednost iznad onoga
+     što OVA sesija sama po sebi pokazuje. Oba broja su tačna, samo su dva
+     različita poređenja — bez ove rečenice izgleda kao bug. */
+  const confusing = workPaceSec < oldPace && preview.vdotObs < baseline;
+  const note = confusing ? `<div class="rsub" style="margin-top:10px;color:var(--amber)">Brže od nedeljnog plana, ali sporije od tvoje već izmerene forme (verovatno podignute ranijim treningom) — zato VDOT ipak opada ka ovoj sesiji.</div>` : '';
   openSheet(`
     <div class="sh-t">Forma izmerena</div>
     <div class="sh-s">Radni tempo ${fmtP(workPaceSec)}/km vs. plan ${fmtP(oldPace)}/km</div>
     <div class="card" style="margin:0 0 14px">
       <div class="card-t">VDOT</div>
-      <div class="big" style="font-size:2rem">${(S.vdotSmoothed||S.meta._vdotAtGen).toFixed(1)} → ${preview.vdotNew.toFixed(1)}</div>
+      <div class="big" style="font-size:2rem">${baseline.toFixed(1)} → ${preview.vdotNew.toFixed(1)}</div>
       <div class="rsub" style="font-size:.8rem;color:var(--txt2);margin-top:4px">Izmereno na ovoj sesiji: ${preview.vdotObs.toFixed(1)} · pomak prigušen (${Math.round(preview.alpha*100)}%) jer je jedna sesija šum, ne dokaz.</div>
+      ${note}
       ${cmp}
     </div>
     <div class="note-src" style="margin-bottom:14px">Menja se SAMO od tekuće nedelje (N${wIdx}) nadalje. Odrađeni treninzi i ručne izmene su netaknuti.</div>
@@ -1024,7 +1044,8 @@ function renderPlan(){
   S.plan.weeks.forEach(w=>{
     const pk=weekPlanKm(w),rk=weekRealKm(w),dn=weekDone(w),ct=weekCountable(w);
     const cur=weekOf(TODAY)===w;
-    const dowTag = w.deload?`<span class="wk-tag">DELOAD</span>`:(w.w===S.plan.weeks.length?`<span class="wk-tag" style="background:rgba(250,46,85,.15);color:var(--pink)">TRKA</span>`:'');
+    const isBaza = w.w <= (S.plan.meta.baseWeeks||0);
+    const dowTag = isBaza?`<span class="wk-tag" style="background:rgba(0,213,250,.15);color:var(--cyan)">BAZA</span>`:(w.deload?`<span class="wk-tag">DELOAD</span>`:(w.w===S.plan.weeks.length?`<span class="wk-tag" style="background:rgba(250,46,85,.15);color:var(--pink)">TRKA</span>`:''));
     h+=`<div class="wk${openW.has(w.w)?' open':''}" data-w="${w.w}">
       <button class="wk-h">
         <div class="wk-n" style="${cur?'color:var(--pink)':''}">N${w.w}</div>
@@ -1457,7 +1478,7 @@ function restartWizard(){
   save();
   closeSheet();
   $('#appHeader').style.display='none';$('#appMain').style.display='none';$('#tabbar').style.display='none';
-  wiz={ raceDist:5000, raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
+  wiz={ raceDist:5000, raceDate:'', pbDist:5000, pbH:'', pbMin:'', pbSec:'', weeklyKm:'', trainedRecently:true, runDays:4, quality:2, lrDow:7, qDays:[], intensity:'std', goalMin:'', goalSec:'' };
   renderOnboard();
   $('#onboard').style.display='';
 }
